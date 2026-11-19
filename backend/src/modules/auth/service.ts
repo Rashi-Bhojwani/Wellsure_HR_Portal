@@ -35,6 +35,10 @@ import {
 import { sendInvitationEmail, sendPasswordResetEmail, sendWelcomeEmail } from "./emails";
 import type { LoginResult, LoginTokens, RequestMetaInput } from "./types";
 import { inForceOn } from "../../lib/effectiveDating";
+import { behaviourValue } from "../behaviours/service";
+import { redis } from "../../lib/redis";
+import { createNotification } from "../notifications/service";
+import { findEmployeeIdByLoginId, normaliseLoginId } from "./loginId";
 
 interface MinimalEmployee {
   employeeCode: string;
@@ -57,8 +61,15 @@ async function getLockoutConfig(): Promise<{ maxAttempts: number; lockoutMinutes
   return getSetting("auth.lockout", { maxAttempts: 5, lockoutMinutes: 15 });
 }
 
+// The setup link HR sends (an invitation): 7 days unless the setting says otherwise (owner decision 2026-11-17, docs/plans/LOGIN_CHECKLIST.md).
+export const DEFAULT_INVITATION_TTL_HOURS = 168;
 async function getInvitationTtlHours(): Promise<number> {
-  return getSetting("auth.invitationTtlHours", 48);
+  return getSetting("auth.invitationTtlHours", DEFAULT_INVITATION_TTL_HOURS);
+}
+
+// A "Forgot password" link: Default behaviours, "Forgot-password link" (two directors; default 60 minutes, shown as "Default in use").
+async function getPasswordResetTtlMinutes(): Promise<number> {
+  return (await behaviourValue("auth.passwordResetLinkMinutes")).value;
 }
 
 // The Zod schema's own .min(8) (validators.ts) is an absolute floor that
@@ -97,7 +108,7 @@ async function completeLogin(
 ): Promise<LoginTokens> {
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   const accessToken = signAccessToken(user.id);
-  const { token: refreshToken } = await issueRefreshToken(user.id, meta);
+  const { token: refreshToken, row: refreshRow } = await issueRefreshToken(user.id, meta);
   await writeAuditLog({
     actorUserId: user.id,
     action: "auth.login.success",
@@ -110,6 +121,7 @@ async function completeLogin(
     status: "authenticated",
     accessToken,
     refreshToken,
+    refreshExpiresAt: refreshRow.expiresAt,
     user: {
       employeeCode: employee.employeeCode,
       roleCodes,
@@ -118,20 +130,16 @@ async function completeLogin(
   };
 }
 
-async function recordFailedLogin(userId: string, meta: RequestMetaInput): Promise<void> {
+// A real account's own record of its failed sign-ins, for HR's and directors' screens (Locked out, Unlock) and the audit log. The decision to refuse
+// is not taken from here but from the per-number counter (loginFailureCount below), which every typed number has, real or not; this record copies
+// that count, so the lock HR sees starts and ends with it.
+async function recordFailedLogin(userId: string, meta: RequestMetaInput, failuresForThisNumber: number): Promise<void> {
   const { maxAttempts, lockoutMinutes } = await getLockoutConfig();
-  const updated = await prisma.user.update({
+  const lockedOut = failuresForThisNumber >= maxAttempts;
+  await prisma.user.update({
     where: { id: userId },
-    data: { failedLoginAttempts: { increment: 1 } },
+    data: { failedLoginAttempts: failuresForThisNumber, ...(lockedOut ? { lockedUntil: new Date(Date.now() + lockoutMinutes * 60_000) } : {}) },
   });
-  let lockedOut = false;
-  if (updated.failedLoginAttempts >= maxAttempts) {
-    lockedOut = true;
-    await prisma.user.update({
-      where: { id: userId },
-      data: { lockedUntil: new Date(Date.now() + lockoutMinutes * 60_000) },
-    });
-  }
   await writeAuditLog({
     actorUserId: userId,
     action: lockedOut ? "auth.login.lockout" : "auth.login.failed",
@@ -142,39 +150,118 @@ async function recordFailedLogin(userId: string, meta: RequestMetaInput): Promis
   });
 }
 
-// spec §3: login = Employee Code + password. Every failure path (unknown
-// code, wrong password) returns the same generic message — only lockout
-// and not-yet-activated get a distinct message, since neither reveals
-// anything an attacker couldn't already infer from Employee Codes being
-// openly known internal identifiers, not secrets.
-export async function login(employeeCode: string, password: string, meta: RequestMetaInput): Promise<LoginResult> {
-  const genericError = () => new HttpError(401, "Invalid Employee Code or password.", "INVALID_CREDENTIALS");
+// ── Sign-in throttling (follow-up 2, docs/plans/LOGIN_REPORT.md) ─────────
+// Failed sign-ins are counted per employee number as typed (normalised as login matches it) whether or not the number exists, and per IP. Once
+// either count reaches its limit, every attempt for that number (or from that IP) gets one reply, the same for a real locked account and a number
+// nobody holds: 429, LOGIN_TOO_MANY_MESSAGE, padded like every failure. Limits: per number = auth.lockout (default 5 failures, lock for 15
+// minutes, counted within that window); per IP = auth.rateLimit.login (default 10 failures in 15 minutes). The lock ends by itself when the counter
+// expires, or when HR or a director unlocks the account (adminUnlock clears the counter too).
+export const LOGIN_TOO_MANY_MESSAGE = "Too many attempts. Try again later or ask HR to unlock your account.";
+export const LOGIN_IP_LIMIT_DEFAULT = { maxAttempts: 10, windowSeconds: 900 };
 
-  const employee = await prisma.employee.findUnique({ where: { employeeCode }, include: { user: true } });
+function loginNumberKey(raw: string): string {
+  return `ratelimit:auth.loginFail.id:${normaliseLoginId(raw).toLowerCase()}`;
+}
+function loginIpKey(ip: string | null | undefined): string {
+  return `ratelimit:auth.loginFail.ip:${ip ?? "unknown"}`;
+}
+
+async function loginOverLimit(raw: string, ip: string | null | undefined): Promise<boolean> {
+  const [{ maxAttempts }, ipLimit] = await Promise.all([getLockoutConfig(), getSetting("auth.rateLimit.login", LOGIN_IP_LIMIT_DEFAULT)]);
+  const [forNumber, forIp] = await redis.mget(loginNumberKey(raw), loginIpKey(ip));
+  return Number(forNumber ?? 0) >= maxAttempts || Number(forIp ?? 0) >= ipLimit.maxAttempts;
+}
+
+/** Counts one failed sign-in for the number typed and for the IP; returns the number's count. The same for every number, held or not. */
+async function loginFailureCount(raw: string, ip: string | null | undefined): Promise<number> {
+  const [{ maxAttempts, lockoutMinutes }, ipLimit] = await Promise.all([getLockoutConfig(), getSetting("auth.rateLimit.login", LOGIN_IP_LIMIT_DEFAULT)]);
+  const numberKey = loginNumberKey(raw);
+  const forNumber = await redis.incr(numberKey);
+  // The window opens with the first failure; the failure that reaches the limit starts the lock period afresh, so the lock lasts lockoutMinutes.
+  if (forNumber === 1 || forNumber === maxAttempts) await redis.expire(numberKey, lockoutMinutes * 60);
+  const ipKey = loginIpKey(ip);
+  if ((await redis.incr(ipKey)) === 1) await redis.expire(ipKey, ipLimit.windowSeconds);
+  return forNumber;
+}
+
+/** Clears the failed-sign-in counter for an employee number (HR or director unlock). */
+export async function clearLoginFailures(employeeCode: string): Promise<void> {
+  await redis.del(loginNumberKey(employeeCode));
+}
+
+// The one reply every failed sign-in gets (owner decision 2026-11-18, docs/plans/LOGIN_REPORT.md): an unknown number, a wrong password and an
+// invited account with no password yet (and a suspended or deactivated one) are indistinguishable — same status, same words, same timing. The
+// first-time hint lives on the login screen as static text instead. Only the existing lockout keeps its own reply (unchanged rule).
+export const LOGIN_FAILED_MESSAGE = "The employee number or password is not correct.";
+
+// Every failed sign-in takes at least this long. Each failure path also does the same expensive step (one argon2 verify, against the real hash or
+// a dummy one), so the floor only has to absorb the small database writes a wrong password adds.
+export const LOGIN_FAILURE_MIN_DURATION_MS = 400;
+// The over-limit reply is padded to the same floor.
+
+let dummyPasswordHash: Promise<string> | null = null;
+function dummyHash(): Promise<string> {
+  dummyPasswordHash ??= argon2.hash(randomBytes(16).toString("hex"));
+  return dummyPasswordHash;
+}
+
+// spec §3: login = employee number + password.
+export async function login(employeeCode: string, password: string, meta: RequestMetaInput): Promise<LoginResult> {
+  const started = Date.now();
+  const pad = async (): Promise<void> => {
+    const elapsed = Date.now() - started;
+    if (elapsed < LOGIN_FAILURE_MIN_DURATION_MS) await new Promise((resolve) => setTimeout(resolve, LOGIN_FAILURE_MIN_DURATION_MS - elapsed));
+  };
+  const fail = async (): Promise<never> => {
+    await pad();
+    throw new HttpError(401, LOGIN_FAILED_MESSAGE, "INVALID_CREDENTIALS");
+  };
+  const tooMany = async (): Promise<never> => {
+    await pad();
+    throw new HttpError(429, LOGIN_TOO_MANY_MESSAGE, "TOO_MANY_ATTEMPTS");
+  };
+  // The same work as checking a real password, for a person who has none to check.
+  const burnVerify = async (): Promise<void> => {
+    await argon2.verify(await dummyHash(), password).catch(() => false);
+  };
+
+  // Over the limit for this number (held or not) or for this IP: decided before anything is looked up, so the reply cannot depend on the number.
+  if (await loginOverLimit(employeeCode, meta.ipAddress)) {
+    await burnVerify();
+    return tooMany();
+  }
+
+  // The employee number, matched exactly after trimming spaces and ignoring case (loginId.ts).
+  const employeeId = await findEmployeeIdByLoginId(employeeCode);
+  const employee = employeeId ? await prisma.employee.findUnique({ where: { id: employeeId }, include: { user: true } }) : null;
   if (!employee?.user) {
-    await argon2.hash(password).catch(() => undefined); // keep timing roughly consistent with the real-user path
-    throw genericError();
+    await burnVerify();
+    await loginFailureCount(employeeCode, meta.ipAddress);
+    return fail();
   }
   const user = employee.user;
 
-  if (user.status === "INVITED") {
-    throw new HttpError(
-      403,
-      "Your account hasn't been activated yet. Check your email for the set-password link.",
-      "NOT_ACTIVATED",
-    );
-  }
+  // Invited (no password yet), suspended or deactivated: exactly the reply an unknown number gets, counted the same way.
   if (user.status !== "ACTIVE") {
-    throw genericError();
+    await burnVerify();
+    await loginFailureCount(employeeCode, meta.ipAddress);
+    return fail();
   }
+  // A lock recorded on the account whose counter has gone (for example Redis was emptied): still refused, with the same over-limit reply.
   if (user.lockedUntil && user.lockedUntil > new Date()) {
-    const minutes = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000);
-    throw new HttpError(423, `Account is locked. Try again in ${minutes} minute(s).`, "LOCKED");
+    await burnVerify();
+    return tooMany();
   }
-  if (!user.passwordHash || !(await argon2.verify(user.passwordHash, password))) {
-    await recordFailedLogin(user.id, meta);
-    throw genericError();
+  if (!user.passwordHash) {
+    await burnVerify();
+    await recordFailedLogin(user.id, meta, await loginFailureCount(employeeCode, meta.ipAddress));
+    return fail();
   }
+  if (!(await argon2.verify(user.passwordHash, password))) {
+    await recordFailedLogin(user.id, meta, await loginFailureCount(employeeCode, meta.ipAddress));
+    return fail();
+  }
+  await clearLoginFailures(employeeCode);
 
   await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null } });
 
@@ -232,7 +319,7 @@ export async function completeLoginTotp(
 export async function refresh(
   presentedToken: string,
   meta: RequestMetaInput,
-): Promise<{ accessToken: string; refreshToken: string }> {
+): Promise<{ accessToken: string; refreshToken: string; refreshExpiresAt: Date }> {
   const outcome = await checkRefreshToken(presentedToken);
 
   if (outcome.kind === "reused") {
@@ -267,7 +354,7 @@ export async function refresh(
     // a hard logout) matches that.
     throw new HttpError(401, "Session refresh in progress elsewhere. Please retry.", "REFRESH_RACE_LOST");
   }
-  const { token: newRefreshToken } = rotated;
+  const { token: newRefreshToken, row: newRow } = rotated;
   const accessToken = signAccessToken(user.id);
   await writeAuditLog({
     actorUserId: user.id,
@@ -277,7 +364,7 @@ export async function refresh(
     ipAddress: meta.ipAddress,
     userAgent: meta.userAgent,
   });
-  return { accessToken, refreshToken: newRefreshToken };
+  return { accessToken, refreshToken: newRefreshToken, refreshExpiresAt: newRow.expiresAt };
 }
 
 export async function logout(presentedToken: string | undefined, userId: string): Promise<void> {
@@ -449,10 +536,15 @@ export async function acceptInvitation(
   await assertPasswordMeetsPolicy(password);
 
   const passwordHash = await argon2.hash(password);
-  const [user] = await prisma.$transaction([
-    prisma.user.update({ where: { id: row.userId }, data: { passwordHash, status: "ACTIVE" } }),
-    prisma.invitationToken.update({ where: { id: row.id }, data: { usedAt: new Date() } }),
-  ]);
+  // Single use, atomically (as resetPassword): only the request that claims the unused token sets the password.
+  const user = await prisma.$transaction(async (tx) => {
+    const claim = await tx.invitationToken.updateMany({ where: { id: row.id, usedAt: null }, data: { usedAt: new Date() } });
+    if (claim.count === 0) return null;
+    return tx.user.update({ where: { id: row.userId }, data: { passwordHash, status: "ACTIVE" } });
+  });
+  if (!user) {
+    throw new HttpError(400, "This invitation link is invalid or has expired.", "INVALID_INVITATION");
+  }
 
   const employee = await prisma.employee.findFirst({
     where: { user: { id: user.id } },
@@ -494,69 +586,149 @@ export async function acceptInvitation(
   return completeLogin(user, employee, roleCodes, meta);
 }
 
-const FORGOT_PASSWORD_MIN_DURATION_MS = 200;
+// Every "Forgot password" request, whatever happens inside, takes at least this long and gets the same reply (controller.ts), so neither the words
+// nor the time tell anyone whether an employee number exists. The real work is a few small queries (mail goes out in the background), well
+// under the floor.
+export const FORGOT_PASSWORD_MIN_DURATION_MS = 400;
 
-// Identical response and (approximately) identical timing whether or not
-// employeeCode exists — see routes.ts, which always responds the same
-// way regardless of what this function does internally.
-export async function forgotPassword(employeeCode: string, meta: RequestMetaInput): Promise<void> {
-  const start = Date.now();
+// Per employee number, on top of the per-IP limit in routes.ts: stops one person's inbox being flooded from many addresses. Counted for every
+// number typed, held or not, so hitting it says nothing about whether the number exists.
+export const FORGOT_PASSWORD_PER_LOGIN_DEFAULT = { maxAttempts: 3, windowSeconds: 3600 };
 
-  const employee = await prisma.employee.findUnique({
-    where: { employeeCode },
-    include: { user: true, personal: true, nameHistory: { where: inForceOn() } },
+async function assertForgotPasswordPerLoginLimit(loginId: string): Promise<void> {
+  const config = await getSetting("auth.rateLimit.forgotPasswordPerLogin", FORGOT_PASSWORD_PER_LOGIN_DEFAULT);
+  const key = `ratelimit:auth.forgotPasswordPerLogin:${normaliseLoginId(loginId).toLowerCase()}`;
+  const count = await redis.incr(key);
+  if (count === 1) await redis.expire(key, config.windowSeconds);
+  if (count > config.maxAttempts) {
+    throw new HttpError(429, "Too many requests for this employee number. Please wait an hour and try again, or ask HR.", "RATE_LIMITED");
+  }
+}
+
+const HR_ROLE_CODES = ["HR_ADMIN", "HR_EXECUTIVE"];
+
+/**
+ * A link was asked for (by the person, or by HR sending a setup link) but there is no email on record, so nothing was sent. HR is told, by number
+ * only: the notice row behind the employee screen and the pending-invitations list, and an in-app notification to each active HR user.
+ */
+export async function recordNoEmailOnRecord(employee: { id: string; employeeCode: string }, actorUserId: string | null, meta: RequestMetaInput = {}): Promise<void> {
+  await prisma.loginEmailMissingNotice.upsert({
+    where: { employeeId: employee.id },
+    create: { employeeId: employee.id },
+    update: { requestCount: { increment: 1 }, lastRequestedAt: new Date() },
   });
-
-  if (employee?.user && employee.user.status === "ACTIVE" && employee.personal?.personalEmail) {
-    const raw = generateOpaqueToken();
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: employee.user.id,
-        tokenHash: hashOpaqueToken(raw),
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-      },
-    });
-    const fullName = employee.nameHistory[0]?.fullName ?? employee.employeeCode;
-    sendPasswordResetEmail(employee.personal.personalEmail, fullName, raw).catch((err: unknown) =>
-      logger.error({ err }, "failed to send password reset email"),
-    );
-    await writeAuditLog({
-      actorUserId: employee.user.id,
-      action: "auth.forgot_password.requested",
-      entityType: "User",
-      entityId: employee.user.id,
-      ipAddress: meta.ipAddress,
-      userAgent: meta.userAgent,
+  await writeAuditLog({
+    actorUserId,
+    action: "auth.link.no_email_on_record",
+    entityType: "Employee",
+    entityId: employee.id,
+    after: { employeeCode: employee.employeeCode, sent: false },
+    ipAddress: meta.ipAddress,
+    userAgent: meta.userAgent,
+  });
+  const hrUsers = await prisma.user.findMany({
+    where: { status: "ACTIVE", roles: { some: { role: { code: { in: HR_ROLE_CODES } } } } },
+    select: { id: true },
+  });
+  for (const hr of hrUsers) {
+    await createNotification({
+      userId: hr.id,
+      type: "auth.no_email_on_record",
+      title: `No email on record for employee ${employee.employeeCode}`,
+      body: `A password link was asked for, but employee ${employee.employeeCode} has no email on record, so nothing was sent. Add their email, then send a setup link.`,
+      link: `/admin/employee/profile/${employee.id}`,
+      payload: { employeeId: employee.id, employeeCode: employee.employeeCode },
     });
   }
+}
 
-  const elapsed = Date.now() - start;
-  if (elapsed < FORGOT_PASSWORD_MIN_DURATION_MS) {
-    await new Promise((resolve) => setTimeout(resolve, FORGOT_PASSWORD_MIN_DURATION_MS - elapsed));
+/** The email on record for an employee, or null when there is none (an empty or blank value counts as none). */
+export function emailOnRecord(personal: { personalEmail: string | null } | null | undefined): string | null {
+  const email = personal?.personalEmail?.trim();
+  return email ? email : null;
+}
+
+// Identical reply and (padded) identical timing whether or not the number exists — see controller.ts, which always responds with the same
+// sentence. INVITED accounts get a link too: that is how a new person sets their first password (owner decision 2026-11-17). The link goes only
+// to the email on record; nothing in the request can choose the address.
+export async function forgotPassword(employeeCode: string, meta: RequestMetaInput): Promise<void> {
+  const start = Date.now();
+  try {
+    await assertForgotPasswordPerLoginLimit(employeeCode);
+
+    const employeeId = await findEmployeeIdByLoginId(employeeCode);
+    const employee = employeeId
+      ? await prisma.employee.findUnique({ where: { id: employeeId }, include: { user: true, personal: true, nameHistory: { where: inForceOn() } } })
+      : null;
+    const user = employee?.user;
+
+    if (employee && user && (user.status === "ACTIVE" || user.status === "INVITED")) {
+      const email = emailOnRecord(employee.personal);
+      if (!email) {
+        await recordNoEmailOnRecord(employee, null, meta);
+      } else {
+        const raw = generateOpaqueToken();
+        const ttlMinutes = await getPasswordResetTtlMinutes();
+        const token = await prisma.passwordResetToken.create({
+          data: { userId: user.id, tokenHash: hashOpaqueToken(raw), expiresAt: new Date(Date.now() + ttlMinutes * 60_000) },
+        });
+        const fullName = employee.nameHistory[0]?.fullName ?? employee.employeeCode;
+        sendPasswordResetEmail(email, fullName, raw).catch((err: unknown) => logger.error({ err }, "failed to send password reset email"));
+        // Who and what, never the token.
+        await writeAuditLog({
+          actorUserId: user.id,
+          action: "auth.forgot_password.requested",
+          entityType: "User",
+          entityId: user.id,
+          after: { tokenId: token.id, accountStatus: user.status, expiresInMinutes: ttlMinutes },
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+        });
+      }
+    }
+  } finally {
+    const elapsed = Date.now() - start;
+    if (elapsed < FORGOT_PASSWORD_MIN_DURATION_MS) {
+      await new Promise((resolve) => setTimeout(resolve, FORGOT_PASSWORD_MIN_DURATION_MS - elapsed));
+    }
   }
 }
 
 export async function resetPassword(token: string, password: string, meta: RequestMetaInput): Promise<void> {
-  const row = await prisma.passwordResetToken.findUnique({ where: { tokenHash: hashOpaqueToken(token) } });
-  if (!row || row.usedAt || row.expiresAt < new Date()) {
-    throw new HttpError(400, "This reset link is invalid or has expired.", "INVALID_RESET_TOKEN");
-  }
+  const invalid = () => new HttpError(400, "This reset link is invalid or has expired.", "INVALID_RESET_TOKEN");
+  const row = await prisma.passwordResetToken.findUnique({ where: { tokenHash: hashOpaqueToken(token) }, include: { user: true } });
+  if (!row || row.usedAt || row.expiresAt < new Date()) throw invalid();
+  // A suspended or deactivated account cannot get back in through an old link.
+  if (row.user.status !== "ACTIVE" && row.user.status !== "INVITED") throw invalid();
   await assertPasswordMeetsPolicy(password);
 
+  const activating = row.user.status === "INVITED";
   const passwordHash = await argon2.hash(password);
-  await prisma.$transaction([
-    prisma.user.update({ where: { id: row.userId }, data: { passwordHash } }),
-    prisma.passwordResetToken.update({ where: { id: row.id }, data: { usedAt: new Date() } }),
-  ]);
+  const now = new Date();
+  // Single use, atomically: the claim only succeeds while the token is still unused, so two concurrent submissions cannot both set a password.
+  const claimed = await prisma.$transaction(async (tx) => {
+    const claim = await tx.passwordResetToken.updateMany({ where: { id: row.id, usedAt: null }, data: { usedAt: now } });
+    if (claim.count === 0) return false;
+    await tx.user.update({ where: { id: row.userId }, data: { passwordHash, ...(activating ? { status: "ACTIVE" as const } : {}) } });
+    // A fresh password makes every other outstanding link for this person pointless: use them all up.
+    await tx.passwordResetToken.updateMany({ where: { userId: row.userId, usedAt: null }, data: { usedAt: now } });
+    if (activating) await tx.invitationToken.updateMany({ where: { userId: row.userId, usedAt: null }, data: { usedAt: now } });
+    return true;
+  });
+  if (!claimed) throw invalid();
+
   await revokeAllUserRefreshTokens(row.userId); // force re-login on every device after a reset
   await writeAuditLog({
     actorUserId: row.userId,
-    action: "auth.password.reset",
+    action: activating ? "auth.account.activated_by_reset" : "auth.password.reset",
     entityType: "User",
     entityId: row.userId,
+    after: { tokenId: row.id },
     ipAddress: meta.ipAddress,
     userAgent: meta.userAgent,
   });
+  // The same joining post accepting an invitation makes: this is the person's first sign-in either way. Never throws.
+  if (activating) await createJoiningPost(row.user.employeeId);
 }
 
 export async function acceptPrivacyNotice(userId: string): Promise<void> {
@@ -713,19 +885,20 @@ export async function adminResetTotp(userId: string, meta: AdminSecurityMeta): P
 // Clears a failed-login lockout. The reason is recorded too (E1.1 — E1
 // dropped it on this one path).
 export async function adminUnlock(userId: string, meta: AdminSecurityMeta): Promise<void> {
-  await prisma.user.update({ where: { id: userId }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+  const user = await prisma.user.update({ where: { id: userId }, data: { failedLoginAttempts: 0, lockedUntil: null }, include: { employee: { select: { employeeCode: true } } } });
+  await clearLoginFailures(user.employee.employeeCode);
   await writeAuditLog({ ...securityAuditFields(meta), action: "auth.unlocked_by_admin", entityType: "User", entityId: userId });
 }
 
-// Issues a password-reset link (1 hour, single use) and emails it to the
+// Issues a password-reset link (Default behaviours auth.passwordResetLinkMinutes, default 1 hour; single use) and emails it to the
 // personal email on file. Returns the link only for the break-glass CLI,
 // whose operator may need to hand it over when email itself is the problem.
 export async function adminIssuePasswordReset(userId: string, meta: AdminSecurityMeta): Promise<{ link: string; emailedTo: string | null }> {
   const employee = await prisma.employee.findFirst({ where: { user: { id: userId } }, include: { personal: true, nameHistory: { where: inForceOn() } } });
   if (!employee) throw new HttpError(404, "User not found.", "NOT_FOUND");
   const raw = generateOpaqueToken();
-  await prisma.passwordResetToken.create({ data: { userId, tokenHash: hashOpaqueToken(raw), expiresAt: new Date(Date.now() + 60 * 60 * 1000) } });
-  const email = employee.personal?.personalEmail ?? null;
+  await prisma.passwordResetToken.create({ data: { userId, tokenHash: hashOpaqueToken(raw), expiresAt: new Date(Date.now() + (await getPasswordResetTtlMinutes()) * 60_000) } });
+  const email = emailOnRecord(employee.personal);
   if (email) {
     await sendPasswordResetEmail(email, employee.nameHistory[0]?.fullName ?? employee.employeeCode, raw).catch((err: unknown) =>
       logger.error({ err }, "failed to send password reset email"),

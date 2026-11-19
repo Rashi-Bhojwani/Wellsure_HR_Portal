@@ -1,5 +1,6 @@
-import { BEHAVIOURS, BEHAVIOUR_KEYS, DEFAULT_LABEL, behaviourValue } from "../../behaviours/service";
+import { BEHAVIOURS, BEHAVIOUR_KEYS, DEFAULT_LABEL, behaviourOn, behaviourValue } from "../../behaviours/service";
 import { RULE_CATALOG, type RuleDef } from "@shared/constants/payrollRules";
+import { CONTINUING, PACK_CHECKED_ON, PACK_RULES, STANDARD_DEFAULT_LABEL, entryOn, isPackCovered, packReviewNeeded, stateLabel } from "@shared/constants/statutoryDefaults";
 import { DEVELOPER_ROLE_CODE, SENSITIVE_PERMISSION_KEYS } from "@shared/constants/sensitiveData";
 import { env } from "../../../config/env";
 import { businessToday } from "../../../lib/businessDate";
@@ -51,12 +52,29 @@ function governed(summary: ItemSummary): Pick<SetupItem, "status" | "enteredBy" 
 
 const RULES_PATH = { label: "Payroll, Rules and Setup", path: "/admin/payroll/rules" };
 
-function ruleItems(rules: ItemSummary[], plain: Map<string, unknown>): SetupItem[] {
+/** Standard defaults pack: what a covered rule with no confirmed director value stands on (in force, so CONFIRMED), or null to show it as before. */
+function standardFor(def: RuleDef, s: ItemSummary, today: string): Pick<SetupItem, "status" | "enteredBy" | "confirmedBy" | "detail"> | null {
+  if (!isPackCovered(def.key) || s.current) return null;
+  const series = PACK_RULES[def.key];
+  const e = series ? entryOn(series, today) : null;
+  if (!e) return null;
+  return { status: "CONFIRMED" as const, enteredBy: null, confirmedBy: null, detail: `${STANDARD_DEFAULT_LABEL}: ${typeof e.value === "string" ? e.value : JSON.stringify(e.value)}${e.from === CONTINUING ? "" : ` from ${e.from}`} (${e.source.name}, checked ${e.checkedOn})${e.verification === "UNVERIFIED" ? ". Review needed" : ""}.` };
+}
+
+/** Owner decision 2026-11-17: PT and LWF tables are the owners' own and never block the first run. A table is required only once a director has entered it (so an
+ *  unconfirmed table is caught here as it is by the run); the state map and placement rule only once either table exists. */
+const PT_LWF_NOT_REQUIRED = "Professional tax and LWF are set by the owners. Until a table is entered nothing is deducted and the run, the payslip and this page say \"not set\".";
+
+function ruleItems(rules: ItemSummary[], plain: Map<string, unknown>, today = PACK_CHECKED_ON): SetupItem[] {
+  const tableEntered = (k: string) => Boolean(rules[RULE_CATALOG.findIndex((d) => d.key === k)]?.current);
+  const anyPtLwf = tableEntered("PT_SLABS") || tableEntered("LWF_TABLE");
   return RULE_CATALOG.map((def: RuleDef, i) => {
     const s = rules[i]!;
     const section: SectionId = def.sensitiveClass ? "identifiers" : def.origin === "STATUTORY" ? "law" : "company";
-    const base = governed(s);
+    const base = standardFor(def, s, today) ?? governed(s);
     let notRequired = def.notRequiredForFirstRun;
+    if ((def.key === "PT_SLABS" || def.key === "LWF_TABLE") && !s.current) notRequired = PT_LWF_NOT_REQUIRED;
+    if ((def.key === "STATE_NAME_MAP" || def.key === "PT_STATE_OF_PLACEMENT") && !anyPtLwf) notRequired = PT_LWF_NOT_REQUIRED;
     if (def.key === "FIXED_DAYS_VALUE" && plain.get("PAY_DAYS_BASIS") !== "FIXED_DAYS" && plain.get("LOP_DIVISOR") !== "FIXED_DAYS") notRequired = "Only used if days are counted as a fixed number, which they are not.";
     const question = def.openQuestion && (def.openQuestion.whenValue === undefined || plain.get(def.key) === def.openQuestion.whenValue) ? def.openQuestion.question : undefined;
     return {
@@ -253,11 +271,153 @@ async function behaviourItems(): Promise<SetupItem[]> {
   for (const key of BEHAVIOUR_KEYS) {
     const def = BEHAVIOURS[key];
     const v = await behaviourValue(key);
-    const state = !v.isDefault ? "CONFIRMED" : def.d37 ? "DEFAULT" : "NOT_SET";
-    const label = state === "CONFIRMED" ? null : state === "DEFAULT" ? DEFAULT_LABEL : "Not set";
-    out.push({ id: `behaviour:${key}`, section: "company", category: "Default behaviours", title: def.title, why: def.what, required: false, notRequiredReason: label ?? "Changed by the directors and confirmed by a different director.", status: state === "CONFIRMED" ? "CONFIRMED" : state === "DEFAULT" ? "PLACEHOLDER" : "NOT_SET", enteredBy: null, confirmedBy: null, detail: state === "CONFIRMED" ? "Changed by the directors, confirmed by a different director." : def.defaultText, where, behaviour: { state, label } });
+    // A setting with a standard default in force (the review interval, PY-43) is shown as a default, not as Not set.
+    const state = !v.isDefault ? "CONFIRMED" : def.d37 || "standard" in def ? "DEFAULT" : "NOT_SET";
+    const label = state === "CONFIRMED" ? null : state === "DEFAULT" ? ("standard" in def ? STANDARD_DEFAULT_LABEL : DEFAULT_LABEL) : "Not set";
+    out.push({ id: `behaviour:${key}`, section: "company", category: "Default behaviours", title: def.title, why: def.what, required: false, notRequiredReason: label ?? "Changed by the directors and confirmed by a different director.", status: state === "CONFIRMED" ? "CONFIRMED" : state === "DEFAULT" ? "PLACEHOLDER" : "NOT_SET", enteredBy: null, confirmedBy: null, detail: state === "CONFIRMED" ? "Changed by the directors, confirmed by a different director." : def.defaultText, where: { ...where, path: `${where.path}#${key}` }, behaviour: { state, label } });
   }
   return out;
+}
+
+/** Standard defaults pack: the non-blocking "Using standard statutory values" row (with what needs review and whether a review is due), and the acknowledgement. */
+async function packItems(demo: boolean): Promise<SetupItem[]> {
+  const where = { label: "Payroll, Ready for First Run", path: "/admin/payroll/ready" };
+  const today = businessToday().toISOString().slice(0, 10);
+  const directorIds = new Set((await activeDirectors()).map((d) => d.userId));
+  const reviews = await prisma.statutoryPackReview.findMany({ orderBy: { createdAt: "asc" } });
+  const acks = reviews.filter((r) => r.kind === "ACKNOWLEDGED" && directorIds.has(r.userId));
+  const lastAt = reviews.at(-1)?.createdAt.toISOString().slice(0, 10);
+  const last = lastAt && lastAt > PACK_CHECKED_ON ? lastAt : PACK_CHECKED_ON;
+  const { reviewDueReasons } = await import("../statutoryPack/service");
+  const due = reviewDueReasons({ today, lastReviewed: last, intervalMonths: (await behaviourValue("statutory.reviewIntervalMonths")).value as number });
+  const review = packReviewNeeded();
+  const names = await namesOfUsers(acks.map((a) => a.userId));
+  return [
+    {
+      id: "pack:status",
+      section: "law",
+      category: "Standard statutory values",
+      title: `Using standard statutory values, last reviewed on ${last}`,
+      why: "PF, ESI and income tax use standard, sourced values until a director enters and a different director confirms their own. Professional tax, LWF, minimum wages, gratuity, notice pay and leave encashment are not among them: the owners set those.",
+      required: false,
+      status: "CONFIRMED",
+      enteredBy: null,
+      confirmedBy: null,
+      detail: `${review.length} value${review.length === 1 ? "" : "s"} need${review.length === 1 ? "s" : ""} review.`,
+      where,
+      warning: [`Using standard statutory values, last reviewed on ${last}. Review needed: ${review.map((r) => r.label).join("; ")}.`, ...due].join(" "),
+    },
+    {
+      id: "pack:acknowledgement",
+      section: "law",
+      category: "Standard statutory values",
+      title: "Both directors have reviewed the standard values",
+      why: "Before the first real payroll run, each of the two directors clicks \"I have reviewed the standard values\". Nothing is entered; the click is recorded and audited.",
+      required: !demo,
+      ...(demo ? { notRequiredReason: "The demo company is exempt." } : {}),
+      status: acks.length >= 2 ? "CONFIRMED" : "PLACEHOLDER",
+      enteredBy: null,
+      confirmedBy: null,
+      detail: acks.length ? `Acknowledged by ${acks.map((a) => `${names.get(a.userId) ?? "a director"} on ${a.createdAt.toISOString().slice(0, 10)}`).join(" and ")}${acks.length < 2 ? "; the other director has not yet." : "."}` : "Neither director has acknowledged them yet.",
+      where,
+    },
+  ];
+}
+
+/** For each active person (their salary lines, or undefined with no salary): how many lack a head chosen for gratuity, notice or encashment, and which heads. Pure. */
+export function headCoverage(uses: ReadonlyArray<readonly [string, readonly string[]]>, people: ReadonlyArray<{ lines: ReadonlyArray<{ componentCode: string }> } | undefined>) {
+  const lacking = new Map<string, number>();
+  let without = 0;
+  let noSalary = 0;
+  for (const sal of people) {
+    if (!sal) { noSalary += 1; continue; }
+    const have = new Set(sal.lines.map((l) => l.componentCode));
+    const missing = new Set(uses.flatMap(([, heads]) => heads.filter((h) => !have.has(h))));
+    for (const h of missing) lacking.set(h, (lacking.get(h) ?? 0) + 1);
+    if (missing.size) without += 1;
+  }
+  return { without, noSalary, lacking };
+}
+
+const BEHAVIOURS_PATH = "/admin/settings/behaviours";
+
+/** No silent zero (2026-11-17, docs/plans/OWNER_EMPTY_SETTINGS.md): a non-blocking row. While any of gratuity, notice pay and leave encashment is Not set:
+ *  "Final settlement rules: not set" (settlements are refused). Once all three are set: whether every active employee's salary has the heads they use. */
+async function settlementHeadItem(): Promise<SetupItem> {
+  const day = businessToday();
+  const dayIso = day.toISOString().slice(0, 10);
+  const [g, n, e] = await Promise.all([behaviourOn("payroll.gratuity", dayIso), behaviourOn("payroll.noticeRecovery", dayIso), behaviourValue("payroll.leaveEncashment")]);
+  const base = { section: "company" as const, category: "Default behaviours", required: false, status: "CONFIRMED" as const, enteredBy: null, confirmedBy: null };
+  const missing = [...(g ? [] : ["gratuity"]), ...(n ? [] : ["notice pay"]), ...(e.value ? [] : ["leave encashment"])];
+  if (missing.length) {
+    return {
+      ...base,
+      id: "settlement:rules",
+      title: "Final settlement rules: not set",
+      why: "Gratuity, notice pay and leave encashment are the owners' to set (salary head, period, formula). Until all three are set, a final settlement is refused, naming what is missing. A monthly run is not affected.",
+      detail: `Not set: ${missing.join(", ")}. A final settlement is refused until ${missing.length === 1 ? "it is" : "they are"} set.`,
+      where: { label: "System Settings, Default behaviours, final settlement rules", path: `${BEHAVIOURS_PATH}#${!g ? "payroll.gratuity" : !n ? "payroll.noticeRecovery" : "payroll.leaveEncashment"}` },
+      behaviour: { state: "NOT_SET", label: "Not set" },
+    };
+  }
+  const uses: Array<[string, string[]]> = [["gratuity", g!.wageHeads], ["notice pay", n!.basisHeads], ["leave encashment", e.value!.basisHeads]];
+  const active = await prisma.employee.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
+  const salaries = await salariesOn(active.map((a) => a.id), day);
+  const { without, noSalary, lacking } = headCoverage(uses, active.map((a) => salaries.get(a.id)));
+  const chosen = uses.map(([use, heads]) => `${use}: ${heads.join(" + ")}`).join("; ");
+  const ok = without === 0;
+  return {
+    ...base,
+    id: "settlement:heads",
+    title: "Gratuity, notice and encashment salary head matches your structures",
+    why: "Gratuity, notice pay and leave encashment are worked out from the salary heads chosen in Default behaviours. A person whose salary lacks a chosen head is refused, never paid nothing.",
+    detail: ok ? `Every active employee with a salary has the chosen heads (${chosen}).${noSalary ? ` ${noSalary} active ${noSalary === 1 ? "person has" : "people have"} no salary yet.` : ""}` : `${without} active ${without === 1 ? "employee's salary does" : "employees' salaries do"} not have a chosen head (${[...lacking].map(([h, c]) => `'${h}' missing for ${c}`).join(", ")}). Chosen: ${chosen}.`,
+    where: { label: "System Settings, Default behaviours, final settlement rules", path: `${BEHAVIOURS_PATH}#payroll.gratuity` },
+    // Shown on Ready for first real run with the other information rows (never blocking): green when it matches, otherwise how many do not.
+    behaviour: { state: ok ? "CONFIRMED" : "NOT_SET", label: ok ? "Matches every structure" : `${without} employee${without === 1 ? "" : "s"} without the chosen head` },
+  };
+}
+
+/** Owner decision 2026-11-17: "Professional Tax and LWF: not set" until both tables are entered (never blocking; nothing is deducted meanwhile). */
+async function ptLwfItem(rules: ItemSummary[]): Promise<SetupItem> {
+  const entered = (k: string) => Boolean(rules[RULE_CATALOG.findIndex((d) => d.key === k)]?.current);
+  const state = (await behaviourValue("statutory.state")).value as string | null;
+  const notSet = [...(entered("PT_SLABS") ? [] : ["Professional Tax"]), ...(entered("LWF_TABLE") ? [] : ["LWF"])];
+  const ok = notSet.length === 0;
+  return {
+    id: "statutory:ptlwf",
+    section: "law",
+    category: "Professional Tax and LWF",
+    title: ok ? "Professional Tax and LWF: set" : `${notSet.join(" and ")}: not set`,
+    why: "Professional tax and labour welfare fund are the owners' to set: the company's state (Default behaviours) and its tables (Rules and setup). No state's values are loaded.",
+    required: false,
+    status: "CONFIRMED",
+    enteredBy: null,
+    confirmedBy: null,
+    detail: `State: ${stateLabel(state)}. ${ok ? "Both tables are entered (each is confirmed as a rule)." : `${notSet.join(" and ")} not set: nothing is deducted for ${notSet.length === 1 ? "it" : "them"}, and the run and the payslip say "not set" (not "not levied"). A monthly run is not blocked.`}`,
+    where: ok ? RULES_PATH : { label: "System Settings, Default behaviours, state", path: `${BEHAVIOURS_PATH}#statutory.state` },
+    behaviour: { state: ok ? "CONFIRMED" : "NOT_SET", label: ok ? "Set" : "Not set" },
+  };
+}
+
+/** Owner decision 2026-11-17: "Minimum wages: not set" until a director has entered a rate and the compared heads (never blocking; the check never changes pay). */
+async function minimumWagesItem(): Promise<SetupItem> {
+  const [rates, basis] = await Promise.all([prisma.minimumWageRate.count(), prisma.minimumWageBasis.count()]);
+  const ok = rates > 0 && basis > 0;
+  return {
+    id: "statutory:minimumWages",
+    section: "law",
+    category: "Minimum wages",
+    title: ok ? "Minimum wages: set" : "Minimum wages: not set",
+    why: "Minimum wage rates, each person's category and the compared pay heads are the directors' to enter; none is loaded. The check never changes pay.",
+    required: false,
+    status: "CONFIRMED",
+    enteredBy: null,
+    confirmedBy: null,
+    detail: ok ? `${rates} rate${rates === 1 ? "" : "s"} entered, compared heads chosen.` : `${rates ? "" : "No rate entered. "}${basis ? "" : "No compared pay heads chosen. "}Until both exist the minimum wages check says Not set.`,
+    where: { label: "Payroll, Minimum Wages", path: "/admin/payroll/minimum-wages" },
+    behaviour: { state: ok ? "CONFIRMED" : "NOT_SET", label: ok ? "Set" : "Not set" },
+  };
 }
 
 export async function buildSetupReport(): Promise<SetupReport> {
@@ -265,7 +425,8 @@ export async function buildSetupReport(): Promise<SetupReport> {
   const ruleData = await loadItems("RULE");
   const summaries = RULE_CATALOG.map((d) => summarise(ruleData, d.key));
   const plain = new Map<string, unknown>(RULE_CATALOG.map((d, i) => [d.key, d.sensitiveClass ? undefined : summaries[i]!.current?.value]));
-  const items: SetupItem[] = [...ruleItems(summaries, plain), ...(await salaryItems()), ...(await layoutItems()), ...(await peopleItems()), ...(await safetyItems(demo)), ...(await behaviourItems())];
+  const items: SetupItem[] = [...ruleItems(summaries, plain, businessToday().toISOString().slice(0, 10)), ...(await packItems(demo)), await settlementHeadItem(), await ptLwfItem(summaries), await minimumWagesItem(), ...(await salaryItems()), ...(await layoutItems()), ...(await peopleItems()), ...(await safetyItems(demo)), ...(await behaviourItems())];
+  items.push(...(await (await import("../../lateness/setupRows")).latenessSetupItems())); // LATE: lateness rows, never blocking (docs/plans/LATE_CHECKLIST.md §7)
   const sections: SetupSection[] = SECTION_ORDER.map((id) => ({ id, ...SECTION_TEXT[id], items: items.filter((i) => i.section === id) }));
   return { generatedAt: new Date().toISOString() /* allow-clock: the instant the report was made */, environment: env.APP_ENV, demo, sections };
 }

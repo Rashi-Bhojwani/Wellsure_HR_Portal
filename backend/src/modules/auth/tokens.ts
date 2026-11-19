@@ -1,7 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { RefreshToken } from "@prisma/client";
-import { env } from "../../config/env";
-import { parseDurationMs } from "../../lib/duration";
+import { behaviourValue } from "../behaviours/service";
 import { prisma } from "../../lib/prisma";
 
 export interface RequestMeta {
@@ -18,9 +17,16 @@ export function hashRefreshToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000; // allow-number: milliseconds in a day
+
+/** How long a session lasts (Default behaviours, "Stay signed in", two directors; default 30 days). The browser cookie uses the token row's own expiry. */
+export async function refreshTokenLifetimeMs(): Promise<number> {
+  return (await behaviourValue("auth.staySignedInDays")).value * DAY_MS;
+}
+
 export async function issueRefreshToken(userId: string, meta: RequestMeta): Promise<IssuedRefreshToken> {
   const token = randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + parseDurationMs(env.JWT_REFRESH_TTL));
+  const expiresAt = new Date(Date.now() + (await refreshTokenLifetimeMs()));
   const row = await prisma.refreshToken.create({
     data: {
       userId,

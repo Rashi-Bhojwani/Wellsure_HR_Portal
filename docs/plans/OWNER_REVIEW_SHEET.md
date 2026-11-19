@@ -256,3 +256,57 @@ Values the directors may enter (none is preset):
 | 116 | Publishing payslips and making the bank file no longer recalculate the finalised run first (it never changes; the approval check is what protects it). Publishing 500 payslips: 1.88 s → 1.38 s. | — | Keep. |
 | 117 | Steps with no recorded 500-person time (publishing payslips, the parallel-run comparison) are held to a screen read's budget, 1.6 s. | A different budget, if you have one. | Keep. |
 | 118 | The go-live gap list is in `PORTAL_READY_REPORT.md` section 7: values you enter, real files to try, items deferred by your decision. | Work through group A, then B. | — |
+
+| # | Decided or asked with the standard statutory defaults (2026-11-16) | What you give | Recommendation |
+|---|---|---|---|
+| 119 | Statutory and tax values now ship in force with their sources (your decision). A value you or the other director enter always wins; a standard value fills only what nobody entered. | — | Keep. |
+| 120 | ~~Needs your review~~ **Moved to "Owner to set", row 136 (2026-11-17)**: no longer loaded; your decision is that the owners set it. | — | See row 136. |
+| 121 | ~~Needs your review~~ **Moved to "Owner to set", row 136 (2026-11-17)**: no longer loaded; your decision is that the owners set it. | — | See row 136. |
+| 122 | ~~Needs your review~~ **Moved to "Owner to set", row 137 (2026-11-17)**: no longer loaded; your decision is that the owners set it. | — | See row 137. |
+| 123 | **Review needed: PF and ESI rounding** (PF whole rupees half up; ESI up to the next rupee; the ESI rules' text is inconsistent). | — | Check one month against greytHR in the parallel run. |
+| 124 | **Review needed: September 2026 PF** uses Rs 25,000 for the whole month (the value in force on its last day); a secondary site says EPFO splits the month by days. | — | Only matters if you ever run September 2026 here. |
+| 125 | **Review needed: tax 2026-27** standard deduction under the 2025 Act (confirmed for AY 2026-27 only); one surcharge table (the old regime's 37% above Rs 5 crore and surcharge marginal relief not modelled); TDS rounding, minimum monthly TDS and one-offs are policy defaults; the section catalogue has only the common old-regime lines. | — | Keep for the parallel run; review with your CA. |
+| 126 | ~~Needs your review~~ **Moved to "Owner to set", row 138 (2026-11-17)**: no longer loaded; your decision is that the owners set it. | — | See row 138. |
+| 127 | ~~Needs your review~~ **Moved to "Owner to set", row 136 (2026-11-17)**: no longer loaded; your decision is that the owners set it. | — | See row 136. |
+| 128 | PY-43: employer PF and ESI are inside CTC by default; a salary-structure line that stands for them is never paid or costed by a run. | — | Keep unless your offer letters say otherwise. |
+| 129 | Before the first real run each director clicks "I have reviewed the standard values" (no data entry; audited); reminders every 6 months (a setting) or when a value's date passes. | Two clicks. | Do it after reading docs/STATUTORY_DEFAULTS.md. |
+| 130 | The PF file uses EPFO's published ECR 2.0 layout ("check against the portal before uploading"); the ESI upload format is not published, so nothing is built. | Try the PF file on the EPFO portal; try the ESI upload on the ESIC portal. | Before the first challan. |
+| 131 | Two errors fixed: the rebate's marginal relief was applied in the old regime too (it is the new regime's only); surcharge now starts only above Rs 50 lakh / 1 crore / 2 crore. | — | Keep. |
+| 132 | Not modelled, named: ESI Rs 176/day exemption and Rs 25,000 for persons with disability; PF Rs 500 minimum admin charge; one year's gratuity for fixed-term staff; exactly six months 0 days counts as a year for gratuity here (the Code says "more than six months"). | — | Tell us if any applies to your staff. |
+
+| # | Decided with "no silent zero" (2026-11-17) | What you give | Recommendation |
+|---|---|---|---|
+| 133 | Gratuity, notice pay and leave encashment are refused when a chosen salary head is not in the person's salary: "Salary head 'BASIC' not found for this employee. Choose the right head in settings." They never come out as 0. The same refusal shows on the final-settlement screen, when preparing a settlement, and on the in-year encashment list (that row cannot be paid). | — | Keep. |
+| 134 | Which heads each of the three uses is chosen on System Settings → Default behaviours (gratuity's wage heads, notice pay's heads, encashment's heads and pay head), from the salary heads that exist in your company; a head that does not exist is refused. Changing one is entered by one director and confirmed by the other, and audited, as before. | Your head codes. | Set them before the first leaver. |
+| 135 | Ready for First Run has an information row (never blocking): "Gratuity, notice and encashment salary head matches your structures". Green when every active employee's salary has the chosen heads; otherwise it says how many do not, and which head is missing for how many. | — | Make it green before the first leaver. |
+
+## Owner to set (2026-11-17)
+
+Your decision: these ship **Not set** and you set them yourselves. PF, ESI and income tax standard values, the PF ceiling dating, PY-43, the PF ECR file and the acknowledgement are unchanged. What was researched is kept, unused, in `docs/STATUTORY_DEFAULTS.md` under "Reference values, not loaded". Every change is entered by one director and confirmed by the other, audited.
+
+| # | Owner to set | Until you set it | Where |
+|---|---|---|---|
+| 136 | **The company's state, and its professional tax and LWF tables.** Nothing is pre-selected and no state's values are loaded. | No PT or LWF is deducted. The run, every payslip and Ready for First Run say "Professional Tax: not set" / "Labour Welfare Fund: not set", so it is never read as "not levied". A monthly run is not blocked. | Default behaviours (state); Rules and setup (`PT_SLABS`, `LWF_TABLE`, the state names). |
+| 137 | **Minimum wages:** each rate (state, category, monthly amount, from, source), each person's category and the compared pay heads. | The check says Not set; it never changes pay. | Payroll, Minimum Wages. |
+| 138 | **Final settlement rules: gratuity, notice pay and leave encashment** (the salary head each uses, the notice period, the encashment divisor and the gratuity figures). Head choices list only heads that exist in your company. The drawer shows the Code on Social Security s.53 figures as reference text only. | A final settlement (and its screen) is refused, naming what is missing: "Gratuity salary head is not set. Choose it in settings." In-year encashment requests are not paid. A monthly run is not affected. | Default behaviours, "Final settlement rules". |
+| 139 | Ready for First Run shows three information rows, never blocking: "Final settlement rules: not set" (then, once set, "salary head matches your structures" with the count of employees that do not), "Professional Tax and LWF: not set", "Minimum wages: not set"; each links to its settings screen. | — | Payroll, Ready for First Run. |
+| 140 | A run calculated before this change on the Rajasthan "not levied" values is out of date (the standard values' version moved from 1 to 2) and is calculated again before it can go further. | Calculate it again. | — |
+
+## Audit fixes (2026-11-18): decided and owner to set
+
+| # | What changed | What you give | Recommendation |
+|---|---|---|---|
+| 141 | Leave days follow each person's own week-off pattern and the holidays at their location (a Monday-to-Saturday company: a Saturday counts; a full week is 6). | — | Check one person's balance after a long leave. |
+| 142 | **Owner to set:** which leave type is the earned / paid leave (accrual and year end) and which is comp-off (Default behaviours, Leave type roles). Until set, the accrual, year end and comp-off grants refuse. | Choose the two types. | Before the first monthly accrual. |
+| 143 | **Owner to set:** at year end, how many days are carried into the new year (a number, 0 = none, or no limit) and whether the rest is encashed or lapses (Leave Types and Policies). Until both are set, year end refuses. Spec §5.2 (encash all, reset) is "0 days, encashment on". | Your carry-forward rule. | Before 31 December. |
+| 144 | Work-from-home monthly / yearly limits and the restricted-holiday quota are now enforced when someone applies; blank means no limit. | Your limits, if any. | Enter them if you have them. |
+| 145 | One leave-day value for year end, mid-year and exit: Default behaviours, Leave encashment amount. The flat rupee rate is gone. | — | Keep. |
+| 146 | **Owner to set:** an accruing leave type's days per month and eligibility period, and the comp-off minimum hours and expiry. Blank was quietly 1 day, from joining, 4 hours, 60 days; now refused. The development data keeps PL 1 day / 90 days and comp-off 4 h / 60 days. | Your figures. | Before the first accrual and the first comp-off. |
+| 147 | The Developer no longer sees personal email, phone, addresses, emergency contact, date of birth, gender or blood group anywhere. It keeps employee number, name, role, status, official email and the job. The four profile fields the login branch adds (machine ID, ID matches machine, no email on record, when it was asked for) stay visible to it (your decision). | — | Keep. |
+| 148 | The Developer can change leave policies (it holds "Leave policies & holidays" by its design), including the new year-end fields. | Say if it should not. | Decide. |
+| 149 | System Settings, Schedules and limits (directors): nightly attendance hour, the "still not marked" hour, report and people-job times, director-notice escalation, how far ahead a change can be scheduled, helpdesk files per message, two import row limits. Each says "Default in use" until saved; a saved time applies at once. Other System Settings cards also say "Default in use" while nobody has saved them. | Change any you want. | Keep the defaults unless you need otherwise. |
+| 150 | Compare Registers: a blank tolerance is the parallel run's own setting (default ₹0), not a hidden ₹1. Directors are reminded in February and March if next year's tax year has not been entered. | — | Keep. |
+| 151 | Not built (listed with estimates in `docs/plans/AUDIT_FIXES.md`): half-day comp-off; the ESI ₹176/day exemption, the ₹25,000 ESI ceiling for persons with disability, the old regime's 37% surcharge and surcharge marginal relief. Note: the setting `TZ_BUSINESS` is ignored by the date code (Asia/Kolkata is fixed); reported only. | Say which you need. | Decide. |
+| 152 | Forgot-password link lifetime and "stay signed in" are Default behaviours (one director proposes, another confirms), "Default in use: 60 minutes" / "30 days" until changed; the browser cookie always ends with the session | Set other values under Default behaviours, Sign-in lifetimes | Keep the defaults for the parallel run |
+| 153 | The Developer no longer holds or can be given leave.policy.manage (leave types, policies, holidays); a migration removed it from existing databases | Say so, and it can be put back in the Developer's defaults | Keep it off: leave policies change people's balances |
+| 154 | Lateness: a waiver approval recomputes the rest of the month at once; a change to an earlier day's arrival is followed up through the job queue (both proven by tests) | — | — |

@@ -2,6 +2,8 @@ export interface LoginTokens {
   status: "authenticated";
   accessToken: string;
   refreshToken: string;
+  /** The refresh token row's own expiry; the browser cookie is given exactly this, so the two never disagree. */
+  refreshExpiresAt: Date;
   user: { employeeCode: string; roleCodes: string[]; privacyNoticeAccepted: boolean };
 }
 

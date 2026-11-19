@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Col, Form, Input, InputNumber, Row, Select, Switch } from "antd";
+import { Button, Col, Form, Input, InputNumber, Row, Select, Switch, Typography } from "antd";
 import {
   MailOutlined,
   AlertOutlined,
@@ -25,22 +25,24 @@ import {
 } from "@shared/constants/peopleDocuments";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as settingsApi from "../../../api/settings";
-import type { DeviceAlertSettings, DeviceHealthThresholds, HelpdeskSettings, LeaveSettings, PeopleDocumentsSettings, RegularizationSettings, SecuritySettings } from "../../../api/settings";
+import type { DeviceAlertSettings, DeviceHealthThresholds, HelpdeskSettings, PeopleDocumentsSettings, RegularizationSettings, SecuritySettings } from "../../../api/settings";
 import { LettersSettingsCard } from "../../../components/letters/LettersSettingsCard";
 import { EmailTemplatesCard } from "./EmailTemplatesCard";
 import { DirectorAuthorityCard } from "../../../components/payroll/DirectorAuthorityCard";
 import { useAuth } from "../../../hooks/useAuth";
-import { FormGroupTitle, PageHeader, Panel, QueryState, Skel, toast } from "../../../ui";
+import { FormGroupTitle, PageHeader, Panel, QueryState, Skel, StatusChip, toast } from "../../../ui";
+import { SchedulesLimitsCard } from "./SchedulesLimitsCard";
 import { fs, fw, radius, space, v } from "../../../theme/tokens";
 import { SectionIntro, SectionNav, SettingsLayout, SwitchList, ToggleRow, type SectionNavItem } from "./SettingsNav";
 
 const ROLE_OPTIONS = ["SUPER_ADMIN", "HR_ADMIN", "HR_EXECUTIVE", "PAYROLL_ADMIN", "MANAGER", "APPROVER", "EMPLOYEE"].map((r) => ({ value: r, label: r }));
 
 const RATE_LIMIT_LABELS: Record<keyof SecuritySettings["rateLimits"], string> = {
-  login: "Login",
+  login: "Sign-in (failed attempts per address)",
   totpVerify: "2FA verify",
   inviteAccept: "Accept invitation",
-  forgotPassword: "Forgot password",
+  forgotPassword: "Forgot password (per address)",
+  forgotPasswordPerLogin: "Forgot password (per employee number)",
   resetPassword: "Reset password",
 };
 
@@ -77,52 +79,38 @@ function SaveButton({ loading, label = "Save changes" }: { loading: boolean; lab
 }
 
 /** Loading / error / content for one settings section, in the board's right-hand panel. */
+// Audit fix 2026-11-18 (item 5): which stored settings each card shows; while nobody has saved them the card says the values below are the defaults in use.
+const DEFAULT_KEYS_BY_TITLE: Record<string, string[]> = {
+  Security: ["auth.lockout", "auth.passwordMinLength", "auth.invitationTtlHours", "auth.rateLimit.login", "auth.rateLimit.totpVerify", "auth.rateLimit.inviteAccept", "auth.rateLimit.forgotPassword", "auth.rateLimit.resetPassword"],
+  "Device alerts": ["attendance.deviceAlerts"],
+  "Device health": ["attendance.deviceHealth"],
+  Regularization: ["attendance.regularization"],
+  "Excess hours": ["attendance.excessHours"],
+  Helpdesk: ["helpdesk.autoCloseDays", "helpdesk.reopenWindowDays"],
+  "People directory": ["people.directory.visibleFields", "people.photo.maxUploadMb", "documents.maxUploadMb", "documents.allowedMimeTypes"],
+};
+
 function SettingsSection({ title, isLoading, error, onRetry, fields, children }: { title: string; isLoading: boolean; error: unknown; onRetry: () => void; fields?: number; children: ReactNode }) {
+  const defaults = useQuery({ queryKey: ["settings", "defaults-in-use"], queryFn: settingsApi.getDefaultsInUse, enabled: !!DEFAULT_KEYS_BY_TITLE[title] });
+  const onDefault = (DEFAULT_KEYS_BY_TITLE[title] ?? []).filter((k) => defaults.data?.includes(k));
   return (
     <QueryState isLoading={isLoading} error={error} onRetry={onRetry} skeleton={<SettingsSkeleton fields={fields} />}>
-      <Panel title={title}>{children}</Panel>
+      <Panel title={title} extra={onDefault.length ? <StatusChip tone="info">Default in use</StatusChip> : undefined}>
+        {onDefault.length > 0 && <SectionIntro>Default in use: nobody has saved {onDefault.length === (DEFAULT_KEYS_BY_TITLE[title] ?? []).length ? "these settings" : "some of these settings"} yet, so the values shown below are the built-in defaults.</SectionIntro>}
+        {children}
+      </Panel>
     </QueryState>
   );
 }
 
-// Separate card + independent save, matching the two separate backend
-// endpoints (GET/PUT /api/settings/security vs /leave) rather than one
-// combined form — the Leave section is deliberately small: a closed
-// catalog of typed settings (see settings/service.ts's comment), not a
-// generic key-value editor, so this is exactly as small as it should be.
+// Audit fix 2026-11-18 (docs/plans/AUDIT_FIXES.md item 4): there is no flat rupee rate any more. The value of a leave day, for year-end, mid-year and exit
+// encashment alike, is the one director setting in Default behaviours ("Leave encashment amount"); this card says where it is.
 function LeaveSettingsCard() {
-  const queryClient = useQueryClient();
-  const { data, isLoading, error, refetch } = useQuery({ queryKey: ["settings", "leave"], queryFn: settingsApi.getLeaveSettings });
-  const [form] = Form.useForm<LeaveSettings>();
-
-  useEffect(() => {
-    if (data) form.setFieldsValue(data);
-  }, [data, form]);
-
-  const saveMutation = useMutation({
-    mutationFn: (values: LeaveSettings) => settingsApi.updateLeaveSettings(values),
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["settings", "leave"], updated);
-      toast.success("Leave settings saved.");
-    },
-    onError: (err) => toast.error(errorMessage(err, "Could not save settings.")),
-  });
-
   return (
-    <SettingsSection title="Year-end PL encashment" isLoading={isLoading || (!data && !error)} error={error} onRetry={() => void refetch()} fields={1}>
-      {data && (
-        <Form form={form} layout="vertical" initialValues={data} onFinish={(values) => saveMutation.mutate(values)} requiredMark={false}>
-          <SectionIntro>One flat rupee amount per encashed leave day, used by Year End Process — pending the owners' confirmation of both the rate and its tax treatment (spec §5.2).</SectionIntro>
-          <Row gutter={[24, 0]}>
-            <Col {...half}>
-              <Form.Item name="encashmentDefaultDailyRate" label="Default daily rate (₹)">
-                <InputNumber min={0} step={1} style={{ width: "100%" }} placeholder="Not configured" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <SaveButton loading={saveMutation.isPending} />
-        </Form>
-      )}
+    <SettingsSection title="Leave encashment" isLoading={false} error={null} onRetry={() => undefined} fields={1}>
+      <SectionIntro>
+        The value of an encashed leave day (year end, during the year and at exit) is one setting: <Link to="/admin/settings/behaviours#payroll.leaveEncashment">Default behaviours, Leave encashment amount</Link>, set by one director and confirmed by the other. Until it is set, encashment is refused; nothing is paid at a flat rate. What year end carries forward or encashes is on <Link to="/admin/admin-tools/leave-policies">Leave Types and Policies</Link>.
+      </SectionIntro>
     </SettingsSection>
   );
 }
@@ -515,9 +503,14 @@ function SecuritySettingsCard() {
               </Form.Item>
             </Col>
             <Col {...half}>
-              <Form.Item name="invitationTtlHours" label="Invitation link validity (hours)" rules={[{ required: true }]}>
+              <Form.Item name="invitationTtlHours" label="Setup link validity (hours)" extra="The link HR sends a new person. 168 hours = 7 days." rules={[{ required: true }]}>
                 <InputNumber min={1} max={336} style={{ width: "100%" }} />
               </Form.Item>
+            </Col>
+            <Col {...half}>
+              <Typography.Text type="secondary">
+                The Forgot-password link&apos;s lifetime and how long a person stays signed in are set under Default behaviours, Sign-in lifetimes (one director proposes, another confirms).
+              </Typography.Text>
             </Col>
           </Row>
 
@@ -576,6 +569,7 @@ export function SystemSettingsPage() {
   const sections: (SectionNavItem & { render: () => ReactNode })[] = [
     { key: "security", label: "Security", icon: <LockOutlined />, group: "General", render: () => <SecuritySettingsCard /> },
     ...(isDirector ? [{ key: "director", label: "Director authority", icon: <SafetyCertificateOutlined />, group: "General", render: () => <DirectorAuthorityCard /> }] : []),
+    ...(isDirector ? [{ key: "schedules", label: "Schedules and limits", icon: <ClockCircleOutlined />, group: "General", render: () => <SchedulesLimitsCard /> }] : []),
     { key: "leave", label: "Leave encashment", icon: <CalendarOutlined />, group: "Leave & people", render: () => <LeaveSettingsCard /> },
     { key: "people", label: "People & documents", icon: <TeamOutlined />, group: "Leave & people", render: () => <PeopleDocumentsSettingsCard /> },
     { key: "helpdesk", label: "Helpdesk", icon: <CustomerServiceOutlined />, group: "Leave & people", render: () => <HelpdeskSettingsCard /> },

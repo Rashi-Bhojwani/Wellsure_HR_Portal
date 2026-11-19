@@ -106,7 +106,9 @@ describe("a payroll run", () => {
     expect(run.watermark.text).toBe("TEST — placeholder rules");
     const rule = (key: string) => run.rules.find((r: { key: string; kind: string }) => r.key === key && r.kind === "RULE");
     expect(rule("PF_EMPLOYEE_RATE")).toMatchObject({ status: "PLACEHOLDER", frozen: false });
-    expect(rule("PT_SLABS")).toMatchObject({ notSet: true, status: "PLACEHOLDER" }); // zero because nobody set it is never mistaken for a confirmed zero
+    // Changed 2026-11-16 (standard defaults pack) and again 2026-11-17 (owner decision, CHANGED_TESTS.md): with nobody's table entered, professional tax is Not set
+    // (no state's values are loaded): nothing is deducted, the run says "not set", and it is pinned as NOT_SET, in force, so it is not the Placeholder here.
+    expect(run.rules.find((r: { key: string; kind: string }) => r.key === "PT_SLABS" && r.kind === "NOT_SET")).toMatchObject({ status: "CONFIRMED", notSet: true, label: "Professional Tax: not set" });
     expect(run.rules.filter((r: { kind: string }) => r.kind === "STRUCTURE").map((r: { frozen: boolean; status: string }) => [r.frozen, r.status])).toEqual([[true, "CONFIRMED"]]);
     expect(run.rules.filter((r: { kind: string }) => r.kind === "COMPONENT").length).toBe(4);
     await expect(assertRunIsReal(((await prisma.payrollRun.findUniqueOrThrow({ where: { id: runId } })).pins as unknown as RulePin[]), "submitted")).rejects.toMatchObject({ code: "PLACEHOLDER_RULES" });

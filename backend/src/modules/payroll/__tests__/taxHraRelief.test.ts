@@ -61,14 +61,16 @@ describe("ST-15 — the HRA exemption against exact fractions (TEST values)", ()
 });
 
 describe("ST-18 — marginal relief on the rebate (TEST values)", () => {
-  it("just above the threshold the tax after the rebate is never more than the income above it; without the setting nothing changes", () => {
+  it("just above the threshold the tax after the rebate is never more than the income above it (new regime); without the setting nothing changes", () => {
+    // Changed 2026-11-16 (standard defaults pack, CHANGED_TESTS.md): the relief is the new regime's only, as the rebate provision gives it; this property ran on the
+    // old regime before. Same shape, now on this file's NEW TEST values (nil to 3,00,000, then 10%; rebate up to 25,000 at 7,00,000).
     fc.assert(
-      fc.property(fc.integer({ min: 500001, max: 900000 }), (taxable) => {
+      fc.property(fc.integer({ min: 700001, max: 900000 }), (taxable) => {
         const pay = String(taxable + 50000); // standard deduction 50000 (TEST)
-        const on = computeAnnualTax({ year: base({ marginalReliefOnRebate: leaf(true) } as Partial<TaxYearValue>), regime: "OLD", taxablePay: pay, deductions: [] });
-        const off = computeAnnualTax({ year: base(), regime: "OLD", taxablePay: pay, deductions: [] });
-        const above = taxable - 500000;
-        const slab = 12500 + (taxable - 500000) * 0.2; // allow-number: TEST slabs of this file
+        const on = computeAnnualTax({ year: base({ marginalReliefOnRebate: leaf(true) } as Partial<TaxYearValue>), regime: "NEW", taxablePay: pay, deductions: [] });
+        const off = computeAnnualTax({ year: base(), regime: "NEW", taxablePay: pay, deductions: [] });
+        const above = taxable - 700000;
+        const slab = (taxable - 300000) * 0.1; // allow-number: TEST slabs of this file
         const expectedAfter = Math.min(slab, above);
         expect(Number(on.slabTax) - Number(on.rebate) - Number(on.marginalRelief ?? "0")).toBeCloseTo(expectedAfter, 6);
         expect(off.marginalRelief).toBeUndefined();
@@ -76,6 +78,15 @@ describe("ST-18 — marginal relief on the rebate (TEST values)", () => {
       }),
       { numRuns: 300 },
     );
+  });
+  it("the old regime has no marginal relief on its rebate, even with the setting on", () => {
+    for (const taxable of [500001, 510000, 600000]) {
+      const pay = String(taxable + 50000);
+      const on = computeAnnualTax({ year: base({ marginalReliefOnRebate: leaf(true) } as Partial<TaxYearValue>), regime: "OLD", taxablePay: pay, deductions: [] });
+      const off = computeAnnualTax({ year: base(), regime: "OLD", taxablePay: pay, deductions: [] });
+      expect(on.marginalRelief).toBeUndefined();
+      expect(on.annualTax).toBe(off.annualTax);
+    }
   });
 });
 

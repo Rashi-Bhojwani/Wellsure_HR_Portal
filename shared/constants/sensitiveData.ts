@@ -14,6 +14,7 @@ export type SensitiveClassId =
   | "EMPLOYEE_STATUTORY"
   | "COMPANY_IDENTIFIERS"
   | "BANK_LAYOUT_AND_DEBIT_ACCOUNT"
+  | "EMPLOYEE_PERSONAL_CONTACT"
   | "PERSONAL_DOCUMENTS"
   | "SENSITIVE_TICKETS"
   | "ACCESS_CONTROL"
@@ -105,6 +106,15 @@ export const SENSITIVE_CLASSES: readonly SensitiveClass[] = [
     view: ["payroll.banklayout.manage", "payroll.banklayout.confirm"],
     edit: ["payroll.banklayout.manage"],
     confirm: ["payroll.banklayout.confirm"],
+  },
+  {
+    // Audit fix 2026-11-18 (docs/plans/AUDIT_FIXES.md item 7): personal contact details, kept from the Developer like pay, bank and identity.
+    id: "EMPLOYEE_PERSONAL_CONTACT",
+    label: "Employees' personal email, phone and home address",
+    what: "How to reach each person at home: personal email, mobile number, current and permanent address, and their emergency contact.",
+    view: ["employee.personal.view"],
+    edit: [],
+    confirm: [],
   },
   {
     id: "PERSONAL_DOCUMENTS",
@@ -237,7 +247,10 @@ export const REVIEWED_NOT_SENSITIVE: readonly PermissionKey[] = [
 export const DEVELOPER_ROLE_CODE = "DEVELOPER";
 // Owners, 2026-11-14 (Session A, Stage 8 block): every report key too (reports.*, including one added later), so even a personal, audited grant of a report
 // permission to someone holding the Developer role is refused and never resolved.
-export const DEVELOPER_FORBIDDEN_KEYS: readonly PermissionKey[] = [...new Set<PermissionKey>([...SENSITIVE_PERMISSION_KEYS, ...PERMISSION_KEYS.filter((k) => k.startsWith("reports."))])];
+// Final merge 2026-11-19 (docs/plans/FINAL_MERGE_REPORT.md): leave policies change people's leave balances (accrual, carry-forward, encashment), so the person who
+// builds and runs the system no longer holds or can be given them. Not a sensitive data class (no personal data is shown), so it is listed here by name.
+export const DEVELOPER_ALSO_FORBIDDEN: readonly PermissionKey[] = ["leave.policy.manage"];
+export const DEVELOPER_FORBIDDEN_KEYS: readonly PermissionKey[] = [...new Set<PermissionKey>([...SENSITIVE_PERMISSION_KEYS, ...PERMISSION_KEYS.filter((k) => k.startsWith("reports.")), ...DEVELOPER_ALSO_FORBIDDEN])];
 
 /**
  * The HR hard lock (docs/plans/HR_CAPABILITIES.md §1A): pay data is never HR's. lib/permissions.ts removes these from anyone who holds an HR role without also being a Super Admin,
@@ -291,7 +304,7 @@ export const DEVELOPER_ROLE_PERMISSIONS: readonly PermissionKey[] = [
   "attendance.exceptions.view",
   "attendance.roster.manage",
   "leave.view",
-  "leave.policy.manage",
+  // leave.policy.manage removed 2026-11-19 (final merge): it is in DEVELOPER_ALSO_FORBIDDEN.
   // No report key (owners, 2026-11-14): every report is closed to the Developer (reports.view, reports.attendance.view, reports.leave.view removed).
   "helpdesk.manage",
   "payroll.rules.view",

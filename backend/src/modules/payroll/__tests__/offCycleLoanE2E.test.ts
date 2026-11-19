@@ -1,6 +1,8 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { setBusinessTodayForTests } from "../../../lib/businessDate";
+import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
+import { setBehaviourByRoute, testEncashment, testGratuity, testNotice } from "./settlementRulesTestHelpers";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader } from "../../employee/__tests__/employeeTestHelpers";
 import { REAL_RULES, closeWorld, closingWorld, confirmAllPins, driveToFinal, resetSeams, staffWith, type Closing } from "./closeTestHelpers";
@@ -39,6 +41,7 @@ describe("end to end: a settlement recovers a loan through an off-cycle run", ()
   let septRun = "";
   let snapshotB: unknown = null;
   let offId = "";
+  const proposalIds: string[] = [];
   const who = (n: string) => world.named[n]!.employeeId;
   const api = (token: string, method: "get" | "post" | "put", path: string, body?: object) => request(app)[method](`/api${path}`).set(...authHeader(token)).send(body);
   const maker = () => world.tokens.maker;
@@ -91,6 +94,7 @@ describe("end to end: a settlement recovers a loan through an off-cycle run", ()
     seam.ready = false;
     setBusinessTodayForTests(null);
     resetSeams();
+    await deleteWithDependents("BehaviourProposal", proposalIds);
     await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe("SELECT set_config('app.audit_purge', 'test', true)");
       await tx.loanTypeVersion.deleteMany({ where: { typeKey } });
@@ -101,6 +105,10 @@ describe("end to end: a settlement recovers a loan through an off-cycle run", ()
   it("the settlement shows what is still owed on the loan, from its source", async () => {
     const before = await api(maker(), "get", `/loans/${loanId}`);
     expect(before.body).toMatchObject({ balance: "20000.00", recovery: "STOPPED" });
+    // Changed 2026-11-17 (CHANGED_TESTS.md; owner decision: the settlement settings ship Not set and a settlement is refused until all three are set). The directors
+    // set them (one enters, the other confirms) so that no automatic line is added: notice recovery off, a gratuity nobody here qualifies for, no leave type encashed
+    // at exit. This test enters its own notice line, so every amount below is unchanged.
+    for (const [key, value] of [["payroll.noticeRecovery", testNotice(world.basic, { recoverShortfall: false })], ["payroll.gratuity", testGratuity(world.basic, { minYears: "40" })], ["payroll.leaveEncashment", testEncashment(world.basic, { exitLeaveTypes: [] })]] as const) proposalIds.push(await setBehaviourByRoute(maker(), world.tokens.checkerA, key, value));
     const sep = await prisma.separation.create({ data: { employeeId: who("a"), lastWorkingDate: new Date("2026-09-30T00:00:00Z"), reason: "test", initiatedByUserId: world.maker.userId } });
     const s = await api(maker(), "post", "/settlements", { separationId: sep.id, directorLines: [{ label: "Notice pay", amount: "30000", source: "made-up figure" }] });
     expect(s.status, JSON.stringify(s.body)).toBe(201);

@@ -7,6 +7,7 @@ import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupFullTestEmployee, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { encashmentAmount, gratuityAmount, gratuityYears, noticeRecoveryAmount, noticeShortfall, overtimeAmount } from "../payPolicies/arith";
 import { dec } from "../money";
+import { exitEncashment, exitGratuity, exitNoticeRecovery } from "../payPolicies/service";
 import { automaticLines } from "../settlements/service";
 import { REAL_RULES, closeWorld, closingWorld, confirmAllPins, driveToFinal, staffWith, type Closing } from "./closeTestHelpers";
 import { goldenFixture, goldenSnapshot } from "./goldenHelpers";
@@ -115,7 +116,8 @@ describe("A2/A3 — over a real run", () => {
     await prisma.overtimeClaim.create({ data: { employeeId: who("a"), date: new Date("2026-08-10T00:00:00Z"), minutes: 150, approvedMinutes: 150, status: "APPROVED", decidedByUserId: world.maker.userId, decidedAt: new Date() } });
     encReqId = (await prisma.leaveEncashmentRequest.create({ data: { employeeId: who("b"), leaveTypeId: plId, leaveYear: 2026, days: "2.5", status: "APPROVED", decidedByUserId: world.maker.userId, decidedAt: new Date() } })).id;
     await prisma.leaveLedger.create({ data: { employeeId: who("c"), leaveTypeId: plId, leaveYear: 2026, entryDate: new Date("2026-01-01T00:00:00Z"), entryType: "GRANT", days: "3", referenceType: "MANUAL_GRANT" } });
-    const otherType = await prisma.leaveType.findFirstOrThrow({ where: { code: { not: "PL" } }, orderBy: { code: "asc" } });
+    // Chosen by its code, not by position: other leave types may be added, and the alphabetical first non-PL type would then change.
+    const otherType = await prisma.leaveType.findUniqueOrThrow({ where: { code: "COF" } });
     otherCode = otherType.code;
     await prisma.leaveLedger.create({ data: { employeeId: who("c"), leaveTypeId: otherType.id, leaveYear: 2026, entryDate: new Date("2026-01-01T00:00:00Z"), entryType: "GRANT", days: "2", referenceType: "MANUAL_GRANT" } });
     const hold = await call(world.tokens.maker, "post", "/api/payroll/holds", { input: { employeeId: who("c"), cycleStart: CYCLE.start, reason: "Documents pending" } });
@@ -159,10 +161,14 @@ describe("A2/A3 — over a real run", () => {
     expect(pre.body.people.find((p: { employeeId: string }) => p.employeeId === who("a"))).toMatchObject({ minutes: 150, amount: null });
     expect((await call(world.tokens.maker, "post", "/api/payroll-pay-policies/overtime/post", { month: "2026-08" })).body.error.code).toBe("NOT_SET");
     expect((await call(world.tokens.maker, "post", "/api/payroll-pay-policies/encashment/pay", { requestId: encReqId })).body.error.code).toBe("NOT_SET");
-    const leave = (await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"))).find((l) => l.kind === "LEAVE_BALANCE")!;
-    expect(leave).toMatchObject({ amount: null, label: "Leave balance (PL), days only" });
-    const exitNotSet = await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"), new Date("2026-09-20T00:00:00Z"));
-    expect(exitNotSet.some((l) => l.kind === "GRATUITY" || l.kind === "NOTICE_RECOVERY")).toBe(false); // Not set: no line at all
+    // Changed 2026-11-17 (owner decision, CHANGED_TESTS.md): leave encashment, gratuity and notice recovery ship Not set. Earlier the same day a missing BASIC head was
+    // refused; now there is no head at all until the directors choose one, so each calculation is refused naming its setting, and never returns 0.
+    const lwd = new Date("2026-09-30T00:00:00Z");
+    const all = "Gratuity salary head is not set. Choose it in settings. Notice pay salary head is not set. Choose it in settings. Leave encashment salary head is not set. Choose it in settings.";
+    await expect(automaticLines(who("c"), lwd)).rejects.toMatchObject({ status: 409, code: "SETTING_NOT_SET", message: all, details: { settings: ["payroll.gratuity", "payroll.noticeRecovery", "payroll.leaveEncashment"] } });
+    await expect(exitEncashment(who("c"), "PL", "1", lwd)).rejects.toMatchObject({ code: "SETTING_NOT_SET", message: "Leave encashment salary head is not set. Choose it in settings." });
+    await expect(exitNoticeRecovery(who("c"), new Date("2026-09-20T00:00:00Z"), lwd)).rejects.toMatchObject({ code: "SETTING_NOT_SET", message: "Notice pay salary head is not set. Choose it in settings." });
+    await expect(exitGratuity(who("c"), lwd)).rejects.toMatchObject({ code: "SETTING_NOT_SET", message: "Gratuity salary head is not set. Choose it in settings." });
   });
 
   it("with TEST values confirmed by two directors and the switches on: overtime and encashment are paid once each, exactly; the ledger records the days; the settlement gets its amount", async () => {
@@ -192,6 +198,10 @@ describe("A2/A3 — over a real run", () => {
     expect((await call(world.tokens.checkerA, "post", "/api/payroll-pay-policies/encashment/pay", { requestId: encReqId })).body.error.code).toBe("ALREADY_PAID");
     const ledger = await prisma.leaveLedger.findMany({ where: { referenceType: "ENCASHMENT_REQUEST", referenceId: encReqId } });
     expect(ledger.map((l) => [l.entryType, l.days.toString()])).toEqual([["ENCASHMENT", "-2.5"]]);
+    // Changed 2026-11-17 (owner decision, CHANGED_TESTS.md): a settlement needs all three settings. Notice (served in full here: no date given) and a gratuity nobody here
+    // qualifies for (40 years) are set first, so this part still checks encashment alone; the gratuity and notice amounts are checked below as before.
+    await setBehaviour("payroll.noticeRecovery", { effectiveFrom: "2026-01-01", noticeDays: 30, recoverShortfall: false, basisHeads: [world.basic], divisor: "30", rounding: { mode: "HALF_UP", scale: 2 }, sourceNote: "TEST value, recovery off" }, "/api/behaviours");
+    await setBehaviour("payroll.gratuity", { effectiveFrom: "2026-01-01", minYears: "40", partYear: "COMPLETED_YEARS_ONLY", wageHeads: [world.basic], daysPerYear: "15", divisor: "26", ceiling: "NONE", rounding: { mode: "HALF_UP", scale: 2 }, sourceNote: "TEST value, nobody qualifies" }, "/api/behaviours");
     const exitLines = (await automaticLines(who("c"), new Date("2026-09-30T00:00:00Z"))).filter((l) => l.kind === "LEAVE_BALANCE");
     const leave = exitLines.find((l) => l.label.includes("(PL)"))!;
     expect(leave.amount).not.toBeNull();

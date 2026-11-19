@@ -55,16 +55,16 @@ export async function getWorkforceDashboard(year: number, viewer: { employeeId: 
     return { month: Number(month), leaveTypeCode: leaveTypeCode as string, days: days.toNumber() };
   });
 
-  const rhRequests = await prisma.leaveRequest.findMany({
-    where: { status: "APPROVED", leaveType: { code: "RH" }, fromDate: { gte: yearStart, lte: yearEnd }, ...scoped },
-    select: { fromDate: true },
-  });
+  // Audit fix 2026-11-18 (audit #2: the code "RH" was assumed): who took each restricted holiday is the approved leave, of whatever type, on that date.
+  const rhCatalog = await prisma.restrictedHoliday.findMany({ where: { date: { gte: yearStart, lte: yearEnd } } });
+  const rhRequests = rhCatalog.length
+    ? await prisma.leaveRequest.findMany({ where: { status: "APPROVED", fromDate: { in: rhCatalog.map((rh) => rh.date) }, ...scoped }, select: { fromDate: true } })
+    : [];
   const rhCounts = new Map<string, number>();
   for (const r of rhRequests) {
     const key = r.fromDate.toISOString().slice(0, 10);
     rhCounts.set(key, (rhCounts.get(key) ?? 0) + 1);
   }
-  const rhCatalog = await prisma.restrictedHoliday.findMany({ where: { date: { gte: yearStart, lte: yearEnd } } });
   const rhBreakdown = rhCatalog
     .map((rh) => ({ date: rh.date.toISOString().slice(0, 10), name: rh.name, employeeCount: rhCounts.get(rh.date.toISOString().slice(0, 10)) ?? 0 }))
     .filter((rh) => rh.employeeCount > 0)

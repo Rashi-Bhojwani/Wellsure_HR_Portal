@@ -20,6 +20,36 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 const monthEnd = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)); // allow-number: calendar arithmetic
 const linesOf = (s: { lines: Array<{ componentCode: string; amount: { toString(): string } }> } | undefined) => (s?.lines ?? []).map((l) => ({ componentCode: l.componentCode, amount: l.amount.toString() }));
 
+// No silent zero (owner instruction 2026-11-17): gratuity, notice pay and leave encashment are worked out from salary heads the directors choose (Default behaviours). A
+// head the employee's salary does not have is refused, in words, and never counted as nothing.
+export const SALARY_HEAD_NOT_FOUND = "SALARY_HEAD_NOT_FOUND";
+export const SETTING_NOT_SET = "SETTING_NOT_SET";
+/** Owner decision 2026-11-17: the three settlement settings ship Not set. Each use's refusal names the missing setting; nothing falls back to a default. */
+export const SETTLEMENT_SETTINGS = {
+  GRATUITY: { key: "payroll.gratuity", text: "Gratuity salary head is not set. Choose it in settings." },
+  NOTICE: { key: "payroll.noticeRecovery", text: "Notice pay salary head is not set. Choose it in settings." },
+  ENCASHMENT: { key: "payroll.leaveEncashment", text: "Leave encashment salary head is not set. Choose it in settings." },
+} as const;
+export type SettlementUse = keyof typeof SETTLEMENT_SETTINGS;
+export function settingNotSet(uses: readonly SettlementUse[]): HttpError {
+  return new HttpError(409, uses.map((u) => SETTLEMENT_SETTINGS[u].text).join(" "), SETTING_NOT_SET, { settings: uses.map((u) => SETTLEMENT_SETTINGS[u].key) });
+}
+/** Which of the three settlement settings are not in force on a day (gratuity and notice are effective-dated; encashment is not). */
+export async function settlementSettingsMissing(day: Date): Promise<SettlementUse[]> {
+  const [g, n, e] = await Promise.all([behaviourOn("payroll.gratuity", iso(day)), behaviourOn("payroll.noticeRecovery", iso(day)), encashmentSetting()]);
+  return [...(g ? [] : ["GRATUITY" as const]), ...(n ? [] : ["NOTICE" as const]), ...(e ? [] : ["ENCASHMENT" as const])];
+}
+/** The configured heads this salary does not have (empty when every one is there). Pure; exported for the test. */
+export function missingHeads(lines: ReadonlyArray<{ componentCode: string }>, heads: readonly string[]): string[] {
+  const have = new Set(lines.map((l) => l.componentCode));
+  return heads.filter((h) => !have.has(h));
+}
+export const headRefusalText = (missing: readonly string[]): string => `Salary head${missing.length === 1 ? "" : "s"} ${missing.map((h) => `'${h}'`).join(", ")} not found for this employee. Choose the right head in settings.`;
+function requireHeads(lines: ReadonlyArray<{ componentCode: string }>, heads: readonly string[], use: "GRATUITY" | "NOTICE" | "ENCASHMENT"): void {
+  const missing = missingHeads(lines, heads);
+  if (missing.length) throw new HttpError(409, headRefusalText(missing), SALARY_HEAD_NOT_FOUND, { use, heads: missing });
+}
+
 export async function overtimeSetting() {
   return (await behaviourValue("payroll.overtimePay")).value;
 }
@@ -96,8 +126,11 @@ export async function encashmentList(actor: Actor) {
     notSet,
     payHead: setting?.payHead ?? null,
     requests: reqs.map((r) => {
-      const amount = setting ? encashmentAmount(r.days.toString(), linesOf(salaries.get(r.employeeId)), setting.basisHeads, setting.divisor, dim, setting.rounding) : null;
-      return { id: r.id, employeeCode: code.get(r.employeeId) ?? "", name: names.get(r.employeeId) ?? "", leaveType: r.leaveType.code, leaveYear: r.leaveYear, days: r.days.toString(), amount: amount ? fixed(amount, 2) : null, paid: done.has(`encashment:${r.id}`), noSalary: !salaries.get(r.employeeId) };
+      const lines = linesOf(salaries.get(r.employeeId));
+      const missing = setting && salaries.get(r.employeeId) ? missingHeads(lines, setting.basisHeads) : [];
+      const headProblem = missing.length ? headRefusalText(missing) : null;
+      const amount = setting && !headProblem ? encashmentAmount(r.days.toString(), lines, setting.basisHeads, setting.divisor, dim, setting.rounding) : null;
+      return { headProblem, id: r.id, employeeCode: code.get(r.employeeId) ?? "", name: names.get(r.employeeId) ?? "", leaveType: r.leaveType.code, leaveYear: r.leaveYear, days: r.days.toString(), amount: amount ? fixed(amount, 2) : null, paid: done.has(`encashment:${r.id}`), noSalary: !salaries.get(r.employeeId) };
     }),
   };
 }
@@ -113,6 +146,7 @@ export async function encashmentPay(raw: unknown, actor: Actor) {
   const r = list.requests.find((x) => x.id === p.data.requestId);
   if (!r) throw new HttpError(404, "No approved encashment request with that id.", "NOT_FOUND");
   if (r.paid) throw new HttpError(409, "Already paid.", "ALREADY_PAID");
+  if (r.headProblem) throw new HttpError(409, r.headProblem, SALARY_HEAD_NOT_FOUND);
   if (r.noSalary || !r.amount) throw new HttpError(409, "The person has no salary in force, so there is nothing to pay from.", "NO_SALARY");
   const setting = (await encashmentSetting())!;
   const req = await prisma.leaveEncashmentRequest.findUniqueOrThrow({ where: { id: r.id } });
@@ -132,23 +166,26 @@ export async function encashmentPay(raw: unknown, actor: Actor) {
 /** At exit (the settlement's leave-balance line): the amount for `days` of a leave type, or null while the setting is Not set or the type is not encashed at exit. */
 export async function exitEncashment(employeeId: string, leaveTypeCode: string, days: string, lastWorkingDate: Date): Promise<{ amount: string; source: string } | null> {
   const setting = await encashmentSetting();
-  if (!setting || !setting.exitLeaveTypes.includes(leaveTypeCode)) return null;
+  if (!setting) throw settingNotSet(["ENCASHMENT"]);
+  if (!setting.exitLeaveTypes.includes(leaveTypeCode)) return null; // a type the directors did not name for exit stays in days only
   const salary = (await salariesOn([employeeId], lastWorkingDate)).get(employeeId);
   if (!salary) return null;
   const dim = new Date(Date.UTC(lastWorkingDate.getUTCFullYear(), lastWorkingDate.getUTCMonth() + 1, 0)).getUTCDate();
+  requireHeads(linesOf(salary), setting.basisHeads, "ENCASHMENT");
   return { amount: fixed(encashmentAmount(days, linesOf(salary), setting.basisHeads, setting.divisor, dim, setting.rounding), 2), source: "leave encashment setting (Default behaviours)" };
 }
 
 /** Part 4: gratuity at exit, or null while the setting is Not set (or not in force on the day) or the person does not qualify. */
 export async function exitGratuity(employeeId: string, lastWorkingDate: Date): Promise<{ amount: string; source: string; years: number } | null> {
   const setting = await behaviourOn("payroll.gratuity", iso(lastWorkingDate));
-  if (!setting) return null;
+  if (!setting) throw settingNotSet(["GRATUITY"]);
   const emp = await prisma.employee.findUnique({ where: { id: employeeId }, select: { dateOfJoining: true } });
   const salary = (await salariesOn([employeeId], lastWorkingDate)).get(employeeId);
   if (!emp || !salary) return null;
   const svc = serviceLength(emp.dateOfJoining, lastWorkingDate);
   const completed = svc.years + svc.months / 12; // allow-number: months in a year, for the eligibility comparison only
   if (completed < Number(setting.minYears)) return null; // allow-number: the setting's own least years
+  requireHeads(linesOf(salary), setting.wageHeads, "GRATUITY");
   const years = gratuityYears(svc.years, svc.months, setting.partYear);
   const amount = gratuityAmount(years, basisOf(linesOf(salary), setting.wageHeads), setting.daysPerYear, setting.divisor, setting.ceiling, setting.rounding);
   return { amount: fixed(amount, 2), source: `gratuity setting (Default behaviours), ${years} year(s) counted`, years };
@@ -157,12 +194,14 @@ export async function exitGratuity(employeeId: string, lastWorkingDate: Date): P
 /** Part 4: notice recovery at exit, or null while the setting is Not set, recovery is off, or the notice was served in full. */
 export async function exitNoticeRecovery(employeeId: string, noticeGiven: Date, lastWorkingDate: Date): Promise<{ amount: string; shortfall: number; source: string } | null> {
   const setting = await behaviourOn("payroll.noticeRecovery", iso(lastWorkingDate));
-  if (!setting || !setting.recoverShortfall) return null;
+  if (!setting) throw settingNotSet(["NOTICE"]);
+  if (!setting.recoverShortfall) return null;
   const given = new Date(`${iso(noticeGiven)}T00:00:00Z`);
   const { shortfall } = noticeShortfall(given, lastWorkingDate, setting.noticeDays);
   if (shortfall === 0) return null;
   const salary = (await salariesOn([employeeId], lastWorkingDate)).get(employeeId);
   if (!salary) return null;
+  requireHeads(linesOf(salary), setting.basisHeads, "NOTICE");
   const amount = noticeRecoveryAmount(shortfall, basisOf(linesOf(salary), setting.basisHeads), setting.divisor, setting.rounding);
   return { amount: fixed(amount, 2), shortfall, source: `notice setting (Default behaviours): ${setting.noticeDays} days, given ${iso(given)}` };
 }

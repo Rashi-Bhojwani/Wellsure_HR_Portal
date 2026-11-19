@@ -6,7 +6,6 @@ import { namesOn, payrollPlacementsOn } from "../../../lib/effectiveDating";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
 import { dec, fixed, sum, type Money } from "../money";
-
 // ST-29 (docs/plans/A_PARITY_ROWS.md part 2): the minimum wages check. Directors enter every value — each rate (state as written on the branches, category, monthly
 // amount, from, source), each person's category, and which pay heads are compared — none is preset. A run's check lists each payable person whose compared amount is
 // below the minimum in force for their branch's state and their category on the run's last day. It never changes pay; until a value exists it says what is Not set.
@@ -43,7 +42,9 @@ export async function setup(actor: Actor) {
     rates: rates.map((r) => ({ id: r.id, state: r.state, category: r.category, monthlyAmount: fixed(dec(r.monthlyAmount.toString()), 2), effectiveFrom: iso(r.effectiveFrom), source: r.source })),
     basis: basis ? { headCodes: basis.headCodes, source: basis.source, setAt: basis.createdAt.toISOString() } : null,
     branchStates: states.map((s) => s.state).filter(Boolean),
-    note: "No rate, category or compared heads are preset: each is entered by a director with its source.",
+    // Owner decision 2026-11-17: no state's rates are loaded (docs/STATUTORY_DEFAULTS.md, "Reference values, not loaded"); every rate is a director's.
+    standardRates: [] as never[],
+    note: "Every rate, each person's category and the compared pay heads are entered by a director; none is loaded. Until a rate is entered the check says Not set.",
   };
 }
 
@@ -99,7 +100,8 @@ export async function check(raw: unknown, actor: Actor) {
   ]);
   const categoryOf = new Map<string, string>();
   for (const c of categories) categoryOf.set(c.employeeId, c.category); // ascending: the newest wins
-  const rates = ratesInForce(rateRows.map((r) => ({ state: r.state, category: r.category, monthlyAmount: r.monthlyAmount.toString(), effectiveFrom: iso(r.effectiveFrom), createdAt: r.createdAt.toISOString() })), end);
+  // Owner decision 2026-11-17: only the directors' rates (no loaded standard rates).
+  const rates = ratesInForce([...rateRows.map((r) => ({ state: r.state, category: r.category, monthlyAmount: r.monthlyAmount.toString(), effectiveFrom: iso(r.effectiveFrom), createdAt: r.createdAt.toISOString() }))], end);
   const code = new Map(emps.map((e) => [e.id, e.employeeCode]));
   const noCategory: string[] = [];
   const noRate = new Set<string>();

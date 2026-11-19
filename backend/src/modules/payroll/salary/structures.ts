@@ -1,3 +1,4 @@
+import { behaviourValue } from "../../behaviours/service";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
 import { type CheckerAvailability } from "../approvals";
@@ -48,6 +49,10 @@ export async function validateStructure(raw: unknown): Promise<{ value: Structur
     const value = parseStructureValue(raw, (code) => components.get(code)?.value.type);
     const day = businessToday().toISOString().slice(0, 10);
     const unusable = [...components].map(([code, c]) => unusableInStructure(code, c.value, day)).filter((m): m is string => m !== null);
+    // PY-43: with employer PF and ESI outside CTC (the directors' setting), a line that stands for them may not count toward CTC.
+    if (value.ctcIncludes.includes("EMPLOYER_CONTRIBUTION") && !((await behaviourValue("payroll.ctcIncludesEmployerStatutory")).value as boolean)) {
+      for (const [code, c] of components) if (c.value.standsFor) unusable.push(`${code} stands for the statutory employer ${c.value.standsFor === "PF_EMPLOYER" ? "PF" : "ESI"}, but the setting "CTC includes the employer's PF and ESI" is off, so it cannot count toward CTC`);
+    }
     if (unusable.length) throw new InvalidSalaryValueError(unusable);
     return { value, components };
   } catch (err) {

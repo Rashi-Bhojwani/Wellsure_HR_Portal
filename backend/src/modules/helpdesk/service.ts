@@ -10,6 +10,7 @@ import { writeAuditLog } from "../../lib/audit";
 import { autoCloseAt, getHelpdeskSettings, reopenUntil, type HelpdeskSettings } from "../../lib/helpdeskSettings";
 import { getPeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
 import { prisma } from "../../lib/prisma";
+import { HELPDESK_ATTACHMENTS_CEILING, scheduleLimitValue } from "../../lib/schedulesAndLimits";
 import { prepareDocumentUpload } from "../../lib/uploads";
 import { HttpError } from "../../middleware/errorHandler";
 import { emitHelpdeskQueue, emitHelpdeskTicket } from "../../realtime/emit";
@@ -44,7 +45,8 @@ export interface ActorMeta {
 
 const notFound = () => new HttpError(404, "Ticket not found.", "NOT_FOUND");
 const DOWNLOAD_URL_TTL_SECONDS = 60;
-export const MAX_ATTACHMENTS_PER_MESSAGE = 3;
+/** The upload ceiling; the number allowed per message is a setting (audit A-18, System Settings, Schedules and limits; default 3). */
+export const MAX_ATTACHMENTS_PER_MESSAGE = HELPDESK_ATTACHMENTS_CEILING;
 
 const canManage = (v: HelpdeskViewer) => v.permissions.has("helpdesk.manage");
 const canSeeSensitive = (v: HelpdeskViewer) => v.permissions.has("helpdesk.sensitive.view");
@@ -199,8 +201,9 @@ export async function listAssignees() {
 // ── Attachments ───────────────────────────────────────────────────────
 
 async function storeAttachments(files: Express.Multer.File[], ticketId: string) {
-  if (files.length > MAX_ATTACHMENTS_PER_MESSAGE) {
-    throw new HttpError(400, `Attach at most ${MAX_ATTACHMENTS_PER_MESSAGE} files per message.`, "INVALID_UPLOAD");
+  const allowed = await scheduleLimitValue<number>("helpdesk.maxAttachmentsPerMessage");
+  if (files.length > allowed) {
+    throw new HttpError(400, `Attach at most ${allowed} files.`, "INVALID_UPLOAD");
   }
   const settings = await getPeopleDocumentsSettings();
   // Validate (and re-encode images) for every file before storing any.
@@ -595,4 +598,9 @@ export async function autoCloseResolvedTickets(now = new Date()): Promise<{ clos
   if (legacyClosed) emitHelpdeskQueue();
   // PEEPS-END helpdesk-visibility
   return { closed };
+}
+
+/** Audit A-18: what the raise and reply forms may attach (a setting). */
+export async function helpdeskLimits() {
+  return { maxAttachmentsPerMessage: await scheduleLimitValue<number>("helpdesk.maxAttachmentsPerMessage") };
 }

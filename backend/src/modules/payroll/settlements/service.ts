@@ -10,7 +10,7 @@ import { decide, liveApproval, registerSubject, submit } from "../approvals";
 import { payrollHash } from "../hash";
 import { unpaidHeldItems } from "../offcycle/held";
 import { outstandingLoans } from "../loans/service";
-import { exitEncashment, exitGratuity, exitNoticeRecovery } from "../payPolicies/service";
+import { exitEncashment, exitGratuity, exitNoticeRecovery, settingNotSet, settlementSettingsMissing } from "../payPolicies/service";
 import { canonicalDecimal, dec, fixed, sum, ZERO, type Money } from "../money";
 
 // P7-6 (docs/plans/P7_6_SETTLEMENTS.md): full and final settlement, prepared and confirmed. Paying it needs an off-cycle run (P7-6b, not built): nothing here moves money.
@@ -33,6 +33,10 @@ export interface SettlementLine {
 
 /** The automatic lines, read from their sources. Exported so the tests can check each against its source. */
 export async function automaticLines(employeeId: string, lastWorkingDate: Date, noticeGiven?: Date): Promise<SettlementLine[]> {
+  // Owner decision 2026-11-17: gratuity, notice pay and leave encashment ship Not set. A final settlement (and its screen) is refused until all three are in force on
+  // the last working day, naming each missing one; it never goes ahead with a zero or a hidden default in their place.
+  const missing = await settlementSettingsMissing(lastWorkingDate);
+  if (missing.length) throw settingNotSet(missing);
   const lines: SettlementLine[] = [];
   // Pay held in a final run and not yet paid (by a director's release or an off-cycle run): one reader shared with the off-cycle run (P7-6b).
   for (const h of await unpaidHeldItems({ employeeId })) lines.push({ kind: "HELD_PAY", label: `Pay held in ${h.run.cycleLabel}`, amount: fixed(dec(h.netPay.toString()), 2), source: `run item ${h.id}` });
@@ -53,12 +57,12 @@ export async function automaticLines(employeeId: string, lastWorkingDate: Date, 
   for (const l of ledger) {
     const days = dec((l._sum.days ?? 0).toString());
     if (days.isZero()) continue;
-    // Part 3 A3: an amount only once the leave encashment setting is confirmed and names this type for exit; until then days only, exactly as before.
+    // Part 3 A3: an amount once the leave encashment setting names this type for exit; a type it does not name stays in days only.
     const code = types.get(l.leaveTypeId) ?? "leave";
     const enc = days.gt(ZERO) ? await exitEncashment(employeeId, code, canonicalDecimal(days), lastWorkingDate) : null;
     lines.push(enc ? { kind: "LEAVE_BALANCE", label: `Leave encashment (${code})`, amount: enc.amount, days: canonicalDecimal(days), source: `leave ledger; ${enc.source}` } : { kind: "LEAVE_BALANCE", label: `Leave balance (${code}), days only`, amount: null, days: canonicalDecimal(days), source: "leave ledger" });
   }
-  // Part 4: gratuity and notice recovery, each only once its setting is confirmed and in force on the last working day; until then no line, exactly as before.
+  // Part 4: gratuity and notice recovery (their settings are in force: checked above).
   const gratuity = await exitGratuity(employeeId, lastWorkingDate);
   if (gratuity) lines.push({ kind: "GRATUITY", label: "Gratuity", amount: gratuity.amount, source: gratuity.source });
   if (noticeGiven) {

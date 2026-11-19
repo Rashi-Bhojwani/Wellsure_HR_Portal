@@ -3,6 +3,8 @@ import { Button, Tooltip } from "antd";
 import { CloseOutlined, DownloadOutlined } from "@ant-design/icons";
 import { canPromptInstall, isIos, isStandalone, promptInstall, subscribeInstall } from "../../lib/pwa";
 import { fs, fw, radius, space, v } from "../../theme/tokens";
+import { BrandLogo } from "../../ui/BrandLogo";
+
 const DISMISS_KEY = "wellsure.installPromptDismissed";
 
 function readDismissed(): boolean {
@@ -40,7 +42,7 @@ export function InstallAppBanner() {
       aria-label="Install the app"
       style={{ display: "flex", alignItems: "center", gap: space[3], background: v.infoSubtle, borderRadius: radius.md, padding: `${space[3]}px ${space[3]}px ${space[3]}px ${space[4]}px`, marginBottom: space[3] }}
     >
-      <img src="/icons/icon-192.png" alt="" width={40} height={40} style={{ borderRadius: radius.sm, flex: "none" }} />
+      <BrandLogo size={40} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ color: v.infoText, fontWeight: fw.semibold, fontSize: fs.md }}>Install the Wellsure app</div>
         <div style={{ color: v.textBody, fontSize: fs.sm, marginTop: 2 }}>

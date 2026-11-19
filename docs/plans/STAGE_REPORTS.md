@@ -651,3 +651,151 @@ sheet (one cell at column 255 of every row, under 1 MB) grew to about 16.7 milli
 **Over budget and fixed:** publishing payslips. Every release (publish, bank file) first ran a full calculation of the run and threw the result away
 (`void computed` in `run/release.ts`, there since the file was written); a final run never changes and the approval's hash is what is checked (before preparing and
 again inside the write). Removed. The payslip PDF step that hung in an earlier container completed here.
+
+**Verification (Stage 9).** Check script (lint, typecheck, tokens, fresh-database migration check, the new and changed tests, frontend tests): all passed.
+**Full backend suite alone:** first run on `b0b853e` 9 failures in 5 files — all caused by the new rehearsal, which left its company-wide August finalisation lock
+and its challans behind (muster, regularization, regularization limits, two parity-row challan tests, the attendance golden replay); fixed in `aa1de7e` (the lock,
+its audit row and the challans removed in `afterAll`, and checked gone). In the same commit, on the owner's request, `payPolicies.test.ts` picks leave types by code
+and the PL line by its label (recorded in CHANGED_TESTS). A later attempt did not start (Postgres and Redis had stopped after a container restart). **Final run on
+`aa1de7e`: 262 files, 2,268 tests, all passed** (24 minutes).
+**CI:** runs 392 and 393 cancelled by later pushes; run 394 (`b0b853e`, docs) green; **run 396 on `aa1de7e`: all 12 jobs green** — install-lint-typecheck-test
+(with the demo company tests), backend shards 1–4 and the shard count check, docker-build, sensitive-ui admin and employee, latency, attendance-replay,
+agent-windows.
+**Browser walk** (scratch demo company; damaged copies of the synthetic samples only): no screen was added or changed in Stage 9, so the walk covered the screens
+whose behaviour changed — the parallel run and the greytHR bank file check (the upload reader) and the payroll runs screen (publishing is faster; the screen is
+unchanged) — as director, HR, manager, employee and Developer at 1280 light and 390 dark: 30 visits, no crash, no server error, no secret text, no sideways scroll.
+The director's truncated statement, truncated bank file and garbage .xls were each refused in plain words on screen ("The file is damaged (a sector points past
+its end)", "… (unknown sector size)"); HR, manager, employee and Developer are refused the parallel run and the runs screen, and see no greytHR bank tab. Keyboard
+at both views: the run chosen with arrows and Enter, the drop areas reached by Tab with focus visible, Enter opens the file chooser, and a damaged file chosen
+that way is refused the same way. (At 390 the file chooser opened in over 3 s on this machine; the walk's first 3 s wait was too short, re-checked with 6 s.)
+**Not verified:** real greytHR exports, real PF/ESI portal files, the bank's acceptance of .xlsx or .csv, staging timings with a pooled, loaded database.
+
+## Session A: Standard statutory defaults pack (written 2026-11-16)
+
+Owner decision 2026-11-16: statutory and tax rules ship with standard, sourced values in force (replaces the Stage 3.2 "nothing statutory is shipped" rule).
+Plan `STATUTORY_DEFAULTS_PLAN.md`; every value, source, check date and verification in `docs/STATUTORY_DEFAULTS.md` (generated from
+`shared/constants/statutoryDefaults.ts`; a test fails if the document is out of date). State: Rajasthan.
+
+**Research.** Direct fetches of the government sites were refused (HTTP 403/503) from the build machine; official documents were read through the search index
+of the official domains (epfindia.gov.in, labour.gov.in, pib.gov.in, esic.gov.in, incometax.gov.in, incometaxindia.gov.in, indiabudget.gov.in, indiacode.nic.in,
+rajasthan.gov.in). **Official:** PF 12% / 8.33% EPS / 3.67% / EDLI 0.5% / admin 0.5% (EPFO); PF ceiling Rs 15,000, then **Rs 25,000 from 17 Sep 2026 (S.O.
+5109(E), Gazette, superseding S.O. 2702(E))**, applied with effective dating; ESI 0.75% / 3.25%, ceiling Rs 21,000 (ESIC); income tax 2026-27: new-regime slabs
+(nil to 4 lakh ... 30% above 24 lakh), rebate Rs 60,000 up to Rs 12 lakh with marginal relief, cess 4%, surcharge (Finance Bill 2026 memorandum: no change in
+rates; Income Tax Department pages); old-regime slabs and Rs 12,500 rebate; gratuity (Code on Social Security s.53: 15/26 per year, more than six months a year,
+five years, ceiling Rs 20 lakh per the Ministry's FAQ); the ECR 2.0 file layout (EPFO). **UNVERIFIED (still used, flagged "review needed"):** Rajasthan PT not
+levied (only a Government of Rajasthan training note), Rajasthan LWF not levied (no LWF Act on the Labour Department's list), Rajasthan minimum wages (secondary
+sites; a reported April 2026 revision unconfirmed), PF/ESI rounding, the 2026-27 standard deduction under the 2025 Act, the policy defaults (TDS rounding, minimum
+monthly TDS, notice 30 days, encashment BASIC/30). **ESI upload format:** not publicly documented; nothing built (an item for the owners on the ESIC portal).
+
+**Built.** Standard values fill only rules, tax years and settings nobody has entered (a director's value, confirmed or not, always wins; never overwritten);
+dated (the entry in force on the month's last day decides the month); pinned as kind PACK, counted in force, never a Placeholder, so they never make a run a test.
+PT/LWF follow one state setting (default Rajasthan: "Not levied in Rajasthan (source, date)", nothing computed); any other state refused ("Values for this state
+have not been loaded"). Tax year 2026-27 standard year; gratuity, notice and encashment defaults; minimum wages standard rates (the check never changes pay); the PF
+file in EPFO's published ECR 2.0 layout when none is confirmed. **Acknowledgement:** a_ migration `statutory_pack_reviews` (append-only; one acknowledgement per
+director); a run that used standard values is refused at submit and every later step until two directors clicked "I have reviewed the standard values" (demo
+exempt); Ready for First Run shows the non-blocking "Using standard statutory values, last reviewed on" row, the review-needed list and the acknowledgement row;
+the Standard statutory values panel lists every value with its source. **Reminder:** when the last review is older than `statutory.reviewIntervalMonths` (default
+6) or a value's effective date has passed since it (rides the hourly director sweep). **PY-43:** `payroll.ctcIncludesEmployerStatutory` default on; a component may
+stand for the statutory employer PF/ESI and is never paid or costed by a run (no double count); with the setting off such a line cannot count toward CTC.
+Screens: Ready for First Run (panel), Rules (standard value and source per rule), Tax Years (the standard year), Minimum wages (standard rates), Default
+behaviours (the new settings labelled "Standard default, change in settings").
+
+**Found and fixed while writing the independent reference:** the rebate's marginal relief was applied in the old regime too (it is the new regime's only);
+surcharge bands began AT 50 lakh / 1 crore / 2 crore (the law says "exceeds").
+
+**Tests.** `statutoryDefaults.test.ts` (22): golden per group against an independent integer reference written in the test from the sourced rules: PF below / at /
+above both ceilings and across 17 Sep 2026 (EPS maximum 1,250 then 2,083); ESI coverage at 20,999 / 21,000 / 21,001 and contributions; PT/LWF not levied in
+Rajasthan and refused for another state; tax 2026-27 at every slab edge, the rebate limit, marginal relief, the surcharge thresholds, both regimes (12,75,000
+salary pays nil, 12,75,001 pays 1); gratuity years and the ceiling; notice and encashment; the ECR line; the reminder; the generated document. Database: dating,
+never overwriting (a director's unconfirmed 18,000 wins and the standard run goes stale), routes (HR, manager, employee, Developer 403; director 200),
+acknowledgement (refused, one ack refused, demo exempt, both acks pass, once per director, audited), Ready for First Run. **Mutation checks: 4 of 4 caught**
+(effective dating, no-overwrite, acknowledgement refusal, double-pay guard). Existing tests changed only because a standard value is now in force or for the relief
+fix: 7 files, each recorded in `CHANGED_TESTS.md`; the payroll golden run unchanged (its world enters every rule).
+**Verification.** Check script (lint, typecheck, tokens, migrations on a fresh database, 13 backend files / 150 tests, frontend 135): all passed. **Full backend
+suite alone on `089ff9a`: 263 files, 2,291 tests, all passed** (26 minutes). **CI:** run 413 (`aa646c1`) failed only in the backend shards, on the existing tests
+not yet updated at that commit (fixed in `3687481`); runs 409–412, 414 and 415 cancelled by later pushes; **run 416 on `089ff9a`: all 12 jobs green**. The overflow
+fix below is screen-only; CI run 417 on it (`2e04229`) failed in backend shard 1 on a pre-existing flaky assertion unrelated to it (`monthlyInputsImport.test.ts`: "the audit row never contains 700" matched the random file hash "...c0700cbd..."); the test now searches every field except the hash (recorded in CHANGED_TESTS); **CI run 418 on `451b178` (the final commit): all 12 jobs green.** **Browser walk** (scratch demo company, migrated): Ready for First Run, Rules, Tax Years, Minimum wages and
+Default behaviours as director, HR, manager, employee and Developer at 1280 light and 390 dark (50 visits): no crash, no server error, no secret text; the director
+sees the standard values, "not levied in Rajasthan" with its source, the standard tax year, the standard Rajasthan rates and the new settings; the other four are
+refused every one. **Found and fixed:** at 390 the Ready page and Minimum wages scrolled sideways (long source URLs in the review notes): those blocks now wrap
+anywhere. Keyboard at both views: "I have reviewed the standard values" reached by Tab with focus visible, Enter opens the dialog, Escape closes it and focus
+returns, Tab to the dialog's confirm and Enter records it ("Recorded: you have reviewed the standard values.").
+**Not verified:** the Rajasthan values against a gazette; the ECR file on the EPFO portal; the ESI upload (format not published); a real month in the parallel run.
+
+## Session A: owner-decided settings ship empty, no silent zero (written 2026-11-17)
+
+Plan: `docs/plans/OWNER_EMPTY_SETTINGS.md`. Commits `14ff0ad` (missing head refused), `062aa85`, `54ff2f6` and this report.
+
+- **Empty by default.** Gratuity, notice pay and leave encashment (heads, notice period, encashment divisor, gratuity figures), the company's state, and
+  Rajasthan PT, LWF and minimum wages are no longer loaded. Their researched values and sources are in `docs/STATUTORY_DEFAULTS.md`, "Reference values, not
+  loaded" (generated, nothing in the app imports them). Pack version 1 → 2. PF, ESI, income tax, PF ceiling dating, PY-43, ECR and the acknowledgement unchanged.
+- **Configurable.** Default behaviours has a "Final settlement rules" section (anchors per setting; head choices list only existing salary heads, the server refuses
+  any other) and a state select that starts blank; changes follow the existing second-director confirmation and audit. Existing director values untouched.
+- **No silent zero.** A final settlement, its guide and each of gratuity / notice / encashment are refused naming the missing setting (`SETTING_NOT_SET`); a
+  configured head missing from a salary is refused by name. PT/LWF with no table: no deduction, a `NOT_SET` pin in force (not a Placeholder, so a month is not
+  blocked), and the run, payslip (screen and PDF) and Ready say "Professional Tax: not set" / "Labour Welfare Fund: not set".
+- **Ready for First Run** (never blocking): "Final settlement rules: not set" → once set, "salary head matches your structures" with the count; "Professional
+  Tax and LWF: not set"; "Minimum wages: not set"; each links to its screen. Also fixed: the review interval and PY-43 rows showed "Not set" although a standard
+  default is in force; the settlement guide hard-coded "Not set" for every rule.
+
+Verification:
+- Check script once (lint, typecheck, tokens, fresh-database migration diff, 17 changed backend files / 204 tests, frontend 18 files / 135 tests): passed.
+- Full backend suite alone: 265 files / 2,302 tests passed. Demo company tests: 7 / 7.
+- Mutation checks, 4 of 4 caught: refusal replaced by a zero amount; a hidden gratuity default; a hidden PT table instead of "not set"; the payslip not saying it.
+- Golden PF / ESI / tax tests unchanged and passing. Developer-403 and permission tests on the behaviours routes (propose, confirm, list, the state).
+- Browser walk (director, HR, manager, employee, Developer; 1280 light and 390 dark; Ready, Default behaviours, Minimum wages, Settlements): 40 visits, the
+  director sees the new rows and sections, every other role is refused, no sideways scroll, no error, no leak, no "not levied". Keyboard: Ready's settlement row
+  link → Default behaviours `#payroll.gratuity` with focus on the card (now 64 px clear of the header, one fix); "Set it" opens the drawer (reference text only),
+  Esc closes, focus returns; the state select opens by keyboard; setting buttons 44 px on the phone. The local dev database was one migration behind
+  (`statutory_pack_reviews`) and was brought up to date with the guarded script.
+- Changed tests: `CHANGED_TESTS.md`, "Owner-decided settings empty (2026-11-17)".
+
+## Session A: audit fixes — leave, hidden defaults, Developer personal data (written 2026-11-18)
+
+Plan: `docs/plans/AUDIT_FIXES.md`. Commits `090fbbb`, `08392ef`, `80eb2bc`, `09c068f` and the guard fix with this report.
+
+- **Leave days** follow the person's own attendance week-off pattern (alternate Saturdays included), a branch override, and their location's holidays; the
+  company default pattern when no assignment; missing → refused. The Saturday-and-Sunday stub is gone. Attendance shows every leave date as leave.
+- **Leave type roles:** Default behaviours "Earned / paid leave type" and "Comp-off leave type" (two directors, audited) replace the "PL" / "COF" code checks;
+  Not set → accrual, year end and comp-off refuse (`SETTING_NOT_SET`).
+- **Honoured:** carry-forward cap (CAPPED n / UNLIMITED) and year-end encashment (rest encashed, or lapsed); both Not set → year end refuses. WFH monthly /
+  yearly limits and the RH quota enforced on apply; empty = "No limit".
+- **One leave-day value** (`payroll.leaveEncashment`) for year end, mid-year and exit; the flat-rupee rate and its routes removed; Not set refuses.
+- **Hidden defaults (audit items 5, 6):** accrual days / eligibility / comp-off hours and expiry Not set and refused (no 1.0 day, 4 h, 60 days); the four
+  settings with no screen and the timed jobs on a director "Schedules and limits" card (a saved time reschedules at once); every defaulted card says "Default in
+  use"; A-16 tax-year reminder, A-18 helpdesk files, A-19 import caps, A-20 compare tolerance, dashboard RH count. Table in the plan.
+- **Developer:** new sensitive class `employee.personal.view` (in `DEVELOPER_FORBIDDEN_KEYS`); personal email, mobile, addresses, emergency contact, DOB,
+  gender and blood group withheld on the profile, grid, search, directory and exports. The four `feat/employee-number-login` fields stay visible (pinned by test).
+
+Skipped (other chats): #8, #9 (lateness branch), #13 and reset/session lifetimes (login branch), C-6 `TZ_BUSINESS` ignored (reported only). Not built, with
+estimates: #7 half-day comp-off (medium, 1–2 days); #10 statutory edge cases (medium, 2–3 days); C-5 April–March leave year (large); live Engage hour (small).
+
+Verification:
+- Phase check script: passed (91 files / 730 tests; frontend 18 / 135; lint, typecheck, tokens, fresh-database migrations).
+- Full backend suite alone: first run 2 `payrollGuards` findings (a 10,000-row ceiling and a calendar month written as numbers), both fixed (allowlist with
+  reason; `allow-number` note); re-run: 269 files / 2,331 tests passed.
+- Mutation checks, 11 of 11 caught: Saturday still skipped, name-only "PL", silent full cash-out, cap ignored, flat-rate fallback, WFH limit ignored, Developer
+  sees personal email, comp-off defaults, schedule not moved, compare ₹1, login-branch field withheld.
+- Goldens unchanged and passing. Developer-403 and permission tests on every new or changed route.
+- Browser walk (director, HR, manager, employee, Developer; 1280 light, 390 dark): behaviours and leave policies for the right roles only; Developer profile
+  "Hidden" for every personal field, HR sees values; Schedules card "Default in use" / "Set". Keyboard: drawer opens with Enter, Esc closes, save works, 44 px on
+  the phone, no sideways scroll.
+- Changed tests: `CHANGED_TESTS.md`, "Audit fixes (2026-11-18)".
+
+## Session A: the final merge (written 2026-11-19)
+
+Report: `docs/plans/FINAL_MERGE_REPORT.md`. Merges `09adb32` (login, no conflict), `e6cc128` (lateness, C1 schema end: both models kept), `6b0baf0` (theme, no
+conflict); `docs/ops-and-decisions` does not exist. Precondition met (`2b47c1e`: one 429 "Too many attempts" for locked and over-limit sign-ins).
+Post-merge fixes `258f6c9`: sign-in lifetimes as two-director settings with the cookie following the token row; leave.policy.manage removed from the Developer
+(migration, forbidden keys, 12 routes 403); the lateness queue follow-up proven with a real BullMQ worker; the Developer pinning test and lateness 403s pass.
+
+Verification:
+- Check script once: passed (25 backend files / 287 tests; frontend 19 / 144; lint, typecheck, tokens, fresh-database migrations). Build and bundle budgets: passed.
+- Full backend suite alone: 276 files / 2,417 tests passed.
+- Mutation checks: 6 of 6 caught.
+- Browser walk, keyboard only, 5 roles at 1280 light and 390 dark: 100 signed-in page loads plus the public screens, 0 crashes, 0 server errors, 0 sideways
+  scroll, no pay figure for HR, a manager or the Developer; the waiver drawer opens by Enter, Esc closes it and focus returns. Found, predates the merge, not
+  fixed: the Apply leave range picker keeps keyboard focus on "From".
+- Fixes for failures caused by the merge: none needed.
+- CI run 445 on `25e3b91`: all 12 jobs green, each read to the end.
+- Changed tests: `CHANGED_TESTS.md`, "Final merge (2026-11-19)".

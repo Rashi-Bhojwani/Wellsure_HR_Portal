@@ -2,14 +2,16 @@ import { Router } from "express";
 import { authenticate } from "../../middleware/authenticate";
 import { requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
+import { z } from "zod";
 import * as controller from "./controller";
+import { defaultsInUse } from "./defaultsInUse";
+import { listSchedulesLimits, setScheduleLimit } from "./schedulesLimits";
 import * as emailTemplates from "../auth/emailTemplates";
-import { updateRegularizationSettingsSchema, updateExcessHoursSettingsSchema, updateDeviceAlertSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
+import { updateRegularizationSettingsSchema, updateExcessHoursSettingsSchema, updateDeviceAlertSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
 
 // System Settings (spec §7.8) — security policy (Phase 1: lockout,
 // password rules, invitation TTL, 2FA-required roles, auth rate limits)
-// plus, from Phase 4, the one leave-domain setting Year End Process needs
-// (the encashment daily rate — see modules/leave/encashmentRate.ts).
+// plus the attendance, helpdesk and people settings. (The flat leave encashment rate that used to be here is gone: audit fix 2026-11-18.)
 export const settingsRouter = Router();
 settingsRouter.use(authenticate);
 
@@ -21,11 +23,15 @@ settingsRouter.put("/email-templates", manage, validate({ body: emailTemplates.u
   void res.json({ templates: await emailTemplates.updateEmailTemplate(req.body, { actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null }) }),
 );
 
+// Audit fix 2026-11-18 (docs/plans/AUDIT_FIXES.md items 5 and 6): times and limits that had no screen, and which settings are still on their default.
+const metaOf = (req: import("express").Request) => ({ actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null });
+settingsRouter.get("/schedules-limits", manage, async (_req, res) => void res.json(await listSchedulesLimits()));
+settingsRouter.put("/schedules-limits/:key", manage, validate({ body: z.object({ value: z.union([z.number(), z.string().max(5)]) }).strict() }), async (req, res) => void res.json(await setScheduleLimit(req.params.key as string, req.body.value, metaOf(req))));
+settingsRouter.get("/defaults-in-use", manage, async (_req, res) => void res.json(await defaultsInUse()));
+
 settingsRouter.get("/security", manage, controller.getSettings);
 settingsRouter.put("/security", manage, validate({ body: updateSettingsSchema }), controller.updateSettings);
 
-settingsRouter.get("/leave", manage, controller.getLeaveSettings);
-settingsRouter.put("/leave", manage, validate({ body: updateLeaveSettingsSchema }), controller.updateLeaveSettings);
 
 settingsRouter.get("/people-documents", manage, controller.getPeopleDocumentsSettings);
 settingsRouter.put(

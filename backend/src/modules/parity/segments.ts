@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { writeAuditLog } from "../../lib/audit";
 import { buildEmployeeScopeWhere } from "../../lib/dataScope";
 import { inForceOn } from "../../lib/effectiveDating";
+import { PERSONAL_VIEW_KEY } from "../../lib/personalData";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
 import { buildWhere, type EmployeeListQuery } from "../employee/grid";
@@ -20,7 +21,7 @@ const ownerInclude = { owner: { include: { employee: { include: { nameHistory: {
 async function resolvedWhere(segment: { id: string; kind: "FILTER" | "LIST"; criteria: Prisma.JsonValue }, viewer: ParityViewer): Promise<Prisma.EmployeeWhereInput> {
   if (segment.kind === "FILTER") {
     // buildWhere already ANDs the viewer's scope (the same function the All Employees grid uses).
-    return buildWhere(segment.criteria as unknown as EmployeeListQuery, viewer.employeeId, viewer.dataScope);
+    return buildWhere(segment.criteria as unknown as EmployeeListQuery, viewer.employeeId, viewer.dataScope, viewer.permissions.has(PERSONAL_VIEW_KEY)); // audit fix 2026-11-18: no search by personal fields without the key
   }
   const scope = await buildEmployeeScopeWhere(viewer.employeeId, viewer.dataScope);
   return { AND: [scope, { segmentMemberships: { some: { segmentId: segment.id } } }] };

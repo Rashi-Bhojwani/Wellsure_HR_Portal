@@ -2,7 +2,7 @@ import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { HR_CAPABILITIES, HR_CAPABILITY_IDS, SPLIT_KEYS } from "@shared/constants/hrCapabilities";
 import { PERMISSION_KEYS } from "@shared/constants/permissions";
-import { HR_FORBIDDEN_KEYS } from "@shared/constants/sensitiveData";
+import { DEVELOPER_FORBIDDEN_KEYS, DEVELOPER_ROLE_CODE, HR_FORBIDDEN_KEYS } from "@shared/constants/sensitiveData";
 import { closeHrCapabilityQueue, hrCapabilityQueue } from "../../../jobs/hrCapabilityQueue";
 import { purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import { applyCapabilities, capabilityState, type SwitchRow } from "../../../lib/hrCapabilities";
@@ -28,10 +28,16 @@ describe("the catalog", () => {
     expect(HR_CAPABILITIES.map((c) => c.id)).toEqual([...HR_CAPABILITY_IDS]);
   });
 
-  it("every split key is held by exactly the default roles that hold its parent", () => {
+  // Changed 2026-11-18 (audit fix item 7, CHANGED_TESTS.md): employee.personal.view is split from employee.view but is a sensitive class, so the Developer, who
+  // holds employee.view, never holds it (its ceiling removes every sensitive key). Every other default role still follows its parent exactly.
+  it("every split key is held by exactly the default roles that hold its parent, except a sensitive child the Developer's ceiling removes", () => {
     for (const role of SYSTEM_ROLES.filter((r) => r.code !== "SUPER_ADMIN")) {
-      for (const { child, parent } of SPLIT_KEYS) expect(role.permissions.includes(child), `${role.code} ${child}`).toBe(role.permissions.includes(parent));
+      for (const { child, parent } of SPLIT_KEYS) {
+        const ceiling = role.code === DEVELOPER_ROLE_CODE && (DEVELOPER_FORBIDDEN_KEYS as readonly string[]).includes(child);
+        expect(role.permissions.includes(child), `${role.code} ${child}`).toBe(ceiling ? false : role.permissions.includes(parent));
+      }
     }
+    expect(SYSTEM_ROLES.find((r) => r.code === DEVELOPER_ROLE_CODE)!.permissions).not.toContain("employee.personal.view");
   });
 });
 

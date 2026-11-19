@@ -62,6 +62,7 @@ table { width: 100%; border-collapse: collapse; }
 </div>
 <div class="net"><div class="n">Net pay ${rupees(c.totals.net)}</div><div class="w">${esc(c.netInWords)}</div></div>
 ${c.employerContributions.length ? `<div class="info"><b>Employer contributions (for information, not part of your pay):</b> ${c.employerContributions.map((l) => `${esc(l.label)} ${rupees(l.amount)}`).join(" · ")}</div>` : ""}
+${c.notices?.length ? `<div class="info"><b>Not set:</b> ${c.notices.map((n) => esc(n)).join(" · ")}. Nothing is deducted for ${c.notices.length === 1 ? "it" : "them"} (this is not the same as not levied).</div>` : ""}
 <div class="foot">This is a computer-generated payslip.${c.ytd ? ` Year to date: financial year ${esc(c.ytd.financialYear)}, from payroll runs in this system only.` : ""}</div>
 </body></html>`;
 }

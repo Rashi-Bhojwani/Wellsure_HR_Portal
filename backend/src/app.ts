@@ -62,6 +62,7 @@ import { settlementsRouter } from "./modules/payroll/settlements/routes"; // P7-
 import { offCycleRouter } from "./modules/payroll/offcycle/routes"; // P7-6b
 import { behavioursRouter } from "./modules/behaviours/routes"; // D-37
 import { payrollReportsRouter } from "./modules/payroll/reports/routes"; // Stage 6
+import { statutoryPackRouter } from "./modules/payroll/statutoryPack/routes"; // Standard statutory defaults pack
 import { payrollGreythrRouter } from "./modules/payroll/greythr/routes"; // Stage 8
 import { complianceRouter } from "./modules/payroll/compliance/routes"; // ST-30
 import { minimumWagesRouter } from "./modules/payroll/minimumWages/routes"; // ST-29
@@ -99,6 +100,7 @@ import { avatarsRouter, profileRouter } from "./modules/avatars/routes";
 // PEEPS-BEGIN leave-types
 import { leaveDocumentsRouter, leaveRulesRouter } from "./modules/leaveRules/routes";
 // PEEPS-END
+import { latenessRouter } from "./modules/lateness/routes"; // LATE: lateness rule (docs/plans/LATE_CHECKLIST.md)
 // A-9 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
 import { employeeExtrasRouter, massEmailRouter, segmentsRouter, separationModesRouter } from "./modules/parity/routes";
 // A-10 (docs/plans/GREYTHR_PARITY_WORKFORCE.md) — begin
@@ -162,6 +164,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/offcycle", router: offCycleRouter }, // P7-6b
   { path: "/api/behaviours", router: behavioursRouter }, // D-37
   { path: "/api/payroll-reports", router: payrollReportsRouter }, // Stage 6
+  { path: "/api/payroll-statutory-pack", router: statutoryPackRouter }, // Standard statutory defaults pack
   { path: "/api/payroll-greythr", router: payrollGreythrRouter }, // Stage 8
   { path: "/api/payroll-compliance", router: complianceRouter }, // ST-30
   { path: "/api/payroll-minimum-wages", router: minimumWagesRouter }, // ST-29
@@ -181,6 +184,7 @@ const BASE_MOUNTS: ReadonlyArray<ApiMount> = [
   { path: "/api/update-import", router: updateImportRouter }, // M session block 2, IE-07/08
   { path: "/api/retention", router: retentionRouter }, // M session block 2, AD-07
   { path: "/api/legal-entities", router: legalEntitiesRouter }, // M session block 2, AD-08
+  { path: "/api/lateness", router: latenessRouter }, // LATE: lateness rule
   { path: "/api/attendance", router: attendanceRouter },
   { path: "/api/biometric", router: biometricRouter },
   // PEEPS-BEGIN recruitment

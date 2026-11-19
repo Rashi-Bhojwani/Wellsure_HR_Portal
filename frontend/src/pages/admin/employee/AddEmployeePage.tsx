@@ -75,6 +75,8 @@ export function AddEmployeePage() {
   // defaulted from the branch (has it a biometric machine?) until HR picks.
   const locationId = Form.useWatch(["official", "locationId"], form) as string | undefined;
   const capture = (Form.useWatch(["official", "attendanceCapture"], form) as "DEVICE" | "MANUAL" | undefined) ?? "DEVICE";
+  const deviceUserIdValue = Form.useWatch(["official", "deviceUserId"], form) as string | undefined;
+  const employeeCodeValue = Form.useWatch(["official", "employeeCode"], form) as string | undefined;
   const branch = locations.find((l) => l.id === locationId);
   const [captureTouched, setCaptureTouched] = useState(false);
   function onLocationChange(id: string) {
@@ -257,12 +259,22 @@ export function AddEmployeePage() {
                   )}
                   <Form.Item
                     name={["official", "employeeCode"]}
-                    label="Employee Code"
-                    rules={[{ required: true }]}
-                    extra={capture === "DEVICE" ? "Permanent login username — pre-filled from Device User ID, editable." : "Permanent login username."}
+                    label="Login ID (employee number)"
+                    rules={[{ required: true, whitespace: true }]}
+                    extra={capture === "DEVICE" ? "Their login ID. Must be the same as the ID on the attendance machine (pre-filled from it)." : "Their login ID."}
                   >
                     <Input />
                   </Form.Item>
+                  {capture === "DEVICE" && deviceUserIdValue && employeeCodeValue && deviceUserIdValue.trim().toLowerCase() !== employeeCodeValue.trim().toLowerCase() && !deviceCheck?.collision && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      style={{ ...WIDE, marginBottom: space[4] }}
+                      title={`The login ID (${employeeCodeValue.trim()}) is not the same as the machine ID (${deviceUserIdValue.trim()})`}
+                      description="The employee number is the login ID and must match the ID on the attendance machine. Use the machine's number unless you have a reason not to."
+                      data-testid="add-employee-id-mismatch"
+                    />
+                  )}
                 </FieldGrid>
 
                 <FormGroupTitle>Job</FormGroupTitle>

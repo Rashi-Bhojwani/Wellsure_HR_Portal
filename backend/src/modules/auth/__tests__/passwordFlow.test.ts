@@ -65,7 +65,7 @@ describe("forgot-password / reset-password", () => {
     const existingAvg = avg(existingTimes);
     const missingAvg = avg(missingTimes);
 
-    // Both should sit close to the 200ms floor service.ts pads to; the gap
+    // Both should sit close to the floor service.ts pads to (FORGOT_PASSWORD_MIN_DURATION_MS); the gap
     // between them should be small relative to that floor.
     expect(Math.abs(existingAvg - missingAvg)).toBeLessThan(100);
   });
@@ -79,13 +79,18 @@ describe("forgot-password / reset-password", () => {
     expect(count).toBe(1);
   });
 
-  it("does not create a reset token for an INVITED account (not yet a real login to reset)", async () => {
+  // Changed 2026-11-17 (docs/plans/LOGIN_REPORT.md): the owners decided a new person sets their first password through "Forgot password" with
+  // their employee number, so an INVITED account now gets a link (it used to get none). A suspended or deactivated account still gets none.
+  it("creates a reset token for an INVITED account (how a new person sets their first password), none for a suspended one", async () => {
     const user = await createTestUser(org, { status: "INVITED" });
     employeeIds.push(user.employeeId);
+    const suspended = await createTestUser(org, { status: "SUSPENDED" });
+    employeeIds.push(suspended.employeeId);
 
     await request(app).post("/api/auth/forgot-password").send({ employeeCode: user.employeeCode });
-    const count = await prisma.passwordResetToken.count({ where: { userId: user.userId } });
-    expect(count).toBe(0);
+    await request(app).post("/api/auth/forgot-password").send({ employeeCode: suspended.employeeCode });
+    expect(await prisma.passwordResetToken.count({ where: { userId: user.userId } })).toBe(1);
+    expect(await prisma.passwordResetToken.count({ where: { userId: suspended.userId } })).toBe(0);
   });
 
   it("resets the password with a valid token, and the token can't be reused", async () => {

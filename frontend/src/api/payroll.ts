@@ -38,6 +38,10 @@ export interface RuleView {
   openQuestion: { id: string; question: string } | null;
   current: VersionView | null;
   lastConfirmed: VersionView | null;
+  /** Standard defaults pack: the standard value payroll uses while no director value is confirmed; `pending` = a director's edit awaits confirmation (not used until then). */
+  standard?: { label: string; value: unknown; from: string | null; source: { name: string; url: string }; checkedOn: string; reviewNeeded: boolean; note: string; pending: boolean } | null;
+  /** PT and LWF follow the company's state: their standard answer is on the Standard statutory values panel. */
+  byState?: boolean;
 }
 
 export interface EditPreview {
@@ -886,6 +890,8 @@ export interface PayslipContent {
   runHash: string;
   /** P7-3: year to date per line ("EARNING|CODE"), on payslips published from P7-3 on; absent on older ones (a published payslip never changes). */
   ytd?: { financialYear: string; byLine: Record<string, string>; gross: string; deductions: string };
+  /** What the run left Not set ("Professional Tax: not set"), so a missing line is never read as "not levied"; absent when nothing was. */
+  notices?: string[];
 }
 export interface PayslipSummary {
   id: string;

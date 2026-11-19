@@ -58,15 +58,18 @@ export function TaxYearsPage() {
   const q = useQuery({ queryKey: ["tax", "year", year], queryFn: () => taxApi.taxYear(year), retry: false });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["tax", "year", year] });
   const y = q.data?.year;
-  const tone = y?.status === "CONFIRMED" ? "success" : y?.status === "PLACEHOLDER" ? "warning" : "neutral";
+  const standardInUse = Boolean(y?.standard?.inUse);
+  // The values payroll uses: a confirmed director year, or the standard year (Standard statutory defaults pack) while no director year is confirmed.
+  const shown = standardInUse ? y!.standard!.value : (y?.value ?? null);
+  const tone = y?.status === "CONFIRMED" ? "success" : standardInUse ? "info" : y?.status === "PLACEHOLDER" ? "warning" : "neutral";
   // A refusal (only directors hold payroll.rules.manage) is a forbidden page, not a bad year.
   if (isForbidden(q.error)) return <><PageHeader title="Tax years" /><EmptyState kind="forbidden" /></>;
   return (
     <>
-      <PageHeader title="Tax years" subtitle="The values income tax is worked out from. None is built in: you enter them, and a different director confirms them." actions={<Button ref={editButton} type="primary" onClick={() => setEditing(true)} disabled={!y}>Enter or change the values</Button>} />
+      <PageHeader title="Tax years" subtitle="The values income tax is worked out from: the standard values for the year, or yours once a different director confirms them." actions={<Button ref={editButton} type="primary" onClick={() => setEditing(true)} disabled={!y}>Enter or change the values</Button>} />
       <Stack>
-        <ApprovalBanner tone="info" title="Nothing here is a tax rule from the system" description="Every figure needs the note saying where it came from and the date it applies from. Form 16 and any tax statement stay DRAFT until the year is confirmed." />
-        <Panel title="Financial year" extra={y && <StatusChip tone={tone}>{y.status === "CONFIRMED" ? "Confirmed" : y.status === "PLACEHOLDER" ? "Entered, not confirmed" : "Not set"}</StatusChip>}>
+        <ApprovalBanner tone="info" title="Standard values, or yours" description="A year with standard values (Standard default, change in settings) is used until a director enters the year (then, as before, a different director confirms it). Every figure needs the note saying where it came from and the date it applies from. Form 16 and any tax statement stay DRAFT until the year is confirmed." />
+        <Panel title="Financial year" extra={y && <StatusChip tone={tone}>{y.status === "CONFIRMED" ? "Confirmed" : standardInUse ? "Standard default, change in settings" : y.status === "PLACEHOLDER" ? "Entered, not confirmed" : "Not set"}</StatusChip>}>
           <Form layout="inline" component="div" style={{ gap: space[3], flexWrap: "wrap" }}>
             <Form.Item label="Year" htmlFor="tax-year-label"><Input id="tax-year-label" value={year} maxLength={7} onChange={(e) => setYear(e.target.value)} style={{ width: 120 }} placeholder="2026-27" /></Form.Item>
             {y?.status === "PLACEHOLDER" && <Button ref={confirmButton} onClick={() => setConfirming(true)}>Confirm this version</Button>}
@@ -74,6 +77,7 @@ export function TaxYearsPage() {
           {q.isLoading && <SkeletonCard lines={3} />}
           {q.error && <ApprovalBanner tone="warning" title="That is not a financial year" description={apiErrorMessage(q.error, "Write it like 2026-27.")} />}
           {y && y.missing.length > 0 && <ApprovalBanner tone="warning" title={`Still to be entered (${y.missing.length})`} description={y.missing.join("; ")} />}
+          {standardInUse && <ApprovalBanner tone="info" title="Payroll uses the standard values for this year" description={`Each value below shows its source. Review needed: ${y!.standard!.unverifiedParts.join(" ")}`} />}
           {y?.current && <Caption>Version {y.current.version} entered by {y.current.authorName}, {formatDate(y.current.createdAt)}.{y.current.confirmation ? ` Confirmed by ${y.current.confirmation.confirmedByName}, ${formatDate(y.current.confirmation.confirmedAt)}.` : " Not confirmed yet."}</Caption>}
         </Panel>
         {y && (
@@ -83,12 +87,12 @@ export function TaxYearsPage() {
               density="compact"
               dataSource={LEAVES}
               pagination={false}
-              mobile={{ title: (l) => l.label, status: (l) => <StatusChip tone={leafOf(y.value, l.path) ? "success" : "warning"}>{leafOf(y.value, l.path) ? "Entered" : "Not set"}</StatusChip>, fields: [{ label: "Source", render: (l) => leafOf(y.value, l.path)?.sourceNote ?? "" }] }}
+              mobile={{ title: (l) => l.label, status: (l) => <StatusChip tone={leafOf(shown, l.path) ? "success" : "warning"}>{leafOf(shown, l.path) ? "Entered" : "Not set"}</StatusChip>, fields: [{ label: "Source", render: (l) => leafOf(shown, l.path)?.sourceNote ?? "" }] }}
               columns={[
                 { title: "Value", key: "l", render: (_, l) => l.label },
-                { title: "Status", key: "s", render: (_, l) => <StatusChip tone={leafOf(y.value, l.path) ? "success" : "warning"}>{leafOf(y.value, l.path) ? "Entered" : "Not set"}</StatusChip> },
-                { title: "Where it came from", key: "n", render: (_, l) => leafOf(y.value, l.path)?.sourceNote ?? "" },
-                { title: "Applies from", key: "f", render: (_, l) => { const f = leafOf(y.value, l.path)?.effectiveFrom; return f ? formatDate(f) : ""; } },
+                { title: "Status", key: "s", render: (_, l) => <StatusChip tone={leafOf(shown, l.path) ? "success" : "warning"}>{leafOf(shown, l.path) ? "Entered" : "Not set"}</StatusChip> },
+                { title: "Where it came from", key: "n", render: (_, l) => leafOf(shown, l.path)?.sourceNote ?? "" },
+                { title: "Applies from", key: "f", render: (_, l) => { const f = leafOf(shown, l.path)?.effectiveFrom; return f ? formatDate(f) : ""; } },
               ]}
             />
           </Panel>
@@ -101,7 +105,7 @@ export function TaxYearsPage() {
 }
 
 function EditDrawer({ year, onClose, onDone }: { year: TaxYearView; onClose: () => void; onDone: () => void }) {
-  const [text, setText] = useState(year.value ? JSON.stringify(year.value, null, 2) : SKELETON);
+  const [text, setText] = useState(year.value ? JSON.stringify(year.value, null, 2) : year.standard ? JSON.stringify(year.standard.value, null, 2) : SKELETON);
   const [note, setNote] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const save = useMutation({

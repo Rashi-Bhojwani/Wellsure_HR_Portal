@@ -115,9 +115,10 @@ export const upsertLeavePolicySchema = z.object({
   eligibilityMode: z.enum(["DAYS", "CALENDAR_MONTHS"]).nullable().optional(),
   eligibilityValue: z.number().int().min(0).nullable().optional(),
   carryForwardCapDays: z.number().min(0).nullable().optional(),
+  carryForwardRule: z.enum(["CAPPED", "UNLIMITED"]).nullable().optional(), // audit fix 2026-11-18: null = Not set (year end refuses)
   negativeBalanceAllowed: z.boolean().optional(),
   skipBalanceCheck: z.boolean().optional(),
-  yearEndEncashment: z.boolean().optional(),
+  yearEndEncashment: z.boolean().nullable().optional(), // audit fix 2026-11-18: null = Not set (year end refuses)
   compOffMinHoursWorked: z.number().min(0).max(24).nullable().optional(),
   compOffExpiryDays: z.number().int().min(0).nullable().optional(),
   wfhMonthlyLimit: z.number().int().min(0).nullable().optional(),

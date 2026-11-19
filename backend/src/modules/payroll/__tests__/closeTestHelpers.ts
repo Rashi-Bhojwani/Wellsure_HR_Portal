@@ -2,7 +2,7 @@ import { prisma } from "../../../lib/prisma";
 import { setArrearsBasisProvider } from "../salary/arrears";
 import { setPayrollConsumptionCheck, setPayrollInputsListener, setPayrollLockCheck } from "../../../lib/effectiveDating";
 import { cleanupFullTestEmployee, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
-import { SettingsBasedEncashmentRateProvider, setEncashmentRateProvider } from "../../leave/encashmentRate";
+import { NotConfiguredEncashmentRateProvider, setEncashmentRateProvider } from "../../leave/encashmentRate";
 import { registerPayrollSeams } from "../wiring";
 import { confirmRule, previewConfirm } from "../rules/governed";
 import type { RulePin } from "../rules/context";
@@ -86,5 +86,5 @@ export const resetSeams = () => {
   setPayrollConsumptionCheck(null);
   setPayrollInputsListener(null);
   setArrearsBasisProvider(null);
-  setEncashmentRateProvider(new SettingsBasedEncashmentRateProvider());
+  setEncashmentRateProvider(new NotConfiguredEncashmentRateProvider());
 };

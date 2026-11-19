@@ -417,7 +417,10 @@ describe("payslips, the bank file and the statutory files from a final run", () 
   // ── Statutory files and the register ──
   it("a statutory file cannot be made until its layout is confirmed; the register needs none and is recorded with its hash", async () => {
     expect((await api(world.tokens.maker, "post", `/runs/${runId}/outputs`, { kind: "PT" })).body.error.code).toBe("LAYOUT_NOT_CONFIRMED");
-    expect((await api(world.tokens.maker, "post", `/runs/${runId}/outputs`, { kind: "PF_ECR" })).body.error.code).toBe("LAYOUT_NOT_CONFIRMED");
+    // Changed 2026-11-16 (standard defaults pack, CHANGED_TESTS.md): the PF file now uses EPFO's published ECR 2.0 layout when none is confirmed, so it gets as far as the
+    // people in it (none has a UAN here); the ESI file has no published layout and still waits for a confirmed one.
+    expect((await api(world.tokens.maker, "post", `/runs/${runId}/outputs`, { kind: "PF_ECR" })).body.error.code).toBe("MISSING_IDENTIFIERS");
+    expect((await api(world.tokens.maker, "post", `/runs/${runId}/outputs`, { kind: "ESI" })).body.error.code).toBe("LAYOUT_NOT_CONFIRMED");
     const reg = await api(world.tokens.maker, "post", `/runs/${runId}/outputs`, { kind: "SALARY_REGISTER" });
     expect([reg.status, reg.body.kind, reg.body.rows]).toEqual([201, "SALARY_REGISTER", 3]);
     expect(reg.body.sha256).toMatch(/^[0-9a-f]{64}$/);

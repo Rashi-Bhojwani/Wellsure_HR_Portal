@@ -2,6 +2,7 @@ import { Prisma, type LeaveDayPart } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { restoreCompOffDays } from "./compOff";
 import { writeLedgerEntry } from "./ledger";
+import { isLeaveTypeFor } from "./leaveTypeRoles";
 
 // Releasing approved leave on a day the person actually worked (Phase 3 commit 2, docs/plans/PHASE_3.md "Leave day
 // worked"). Manual Override calls this inside its own transaction, so the attendance override and the leave
@@ -92,7 +93,7 @@ export async function releaseLeaveOnDay(
     if (returned.greaterThan(0)) {
       const remarks = `Worked on approved leave, ${input.date}: the leave for this day was released by HR. ${input.reason}`;
       const entryDate = date;
-      if (c.leaveTypeCode === "COF") {
+      if (await isLeaveTypeFor("COMP_OFF", c.leaveTypeId)) {
         await restoreCompOffDays(tx, { leaveRequestId: c.requestId, releaseId: release.id, employeeId: input.employeeId, amount: returned, leaveYear: entryDate.getUTCFullYear(), entryDate, remarks, actorUserId: input.actorUserId });
       } else {
         await writeLedgerEntry(tx, {

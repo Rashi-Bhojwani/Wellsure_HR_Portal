@@ -588,7 +588,13 @@ model Employee {
   encashmentRequests         LeaveEncashmentRequest[] // block 2, LV-23
   dataErasures               DataErasure[] // block 2, AD-07
   legalEntity                EmployeeLegalEntity? // block 2, AD-08
+  // LOGIN-BEGIN (employee-number login, docs/plans/LOGIN_CHECKLIST.md)
+  loginEmailMissingNotice    LoginEmailMissingNotice?
+  // LOGIN-END
   // M-END
+  // LATE-BEGIN (lateness rule, docs/plans/LATE_CHECKLIST.md)
+  lateWaivers                LateWaiver[]
+  // LATE-END
 
   // PEEPS-BEGIN avatar-choices
   avatarChoices           EmployeeAvatarChoice[]
@@ -972,12 +978,15 @@ model LeavePolicy {
   accrualDaysPerMonth    Decimal?              @map("accrual_days_per_month") @db.Decimal(5, 2) // 1.00
   eligibilityMode        LeaveEligibilityMode? @map("eligibility_mode") // DAYS
   eligibilityValue       Int?                  @map("eligibility_value") // 90
-  carryForwardCapDays    Decimal?              @map("carry_forward_cap_days") @db.Decimal(5, 2) // null = uncapped
+  carryForwardCapDays    Decimal?              @map("carry_forward_cap_days") @db.Decimal(5, 2) // the cap when carryForwardRule is CAPPED
+  // A (audit fix 2026-11-18, docs/plans/AUDIT_FIXES.md item 3): what year end carries into the new year. CAPPED (at most carryForwardCapDays) or UNLIMITED;
+  // null = Not set, and the year-end run refuses. Nothing is assumed.
+  carryForwardRule       String?               @map("carry_forward_rule")
   negativeBalanceAllowed Boolean               @default(false) @map("negative_balance_allowed")
   skipBalanceCheck       Boolean               @default(false) @map("skip_balance_check") // true for LOP only —
   // LOP has no balance concept at all rather than an "unlimited" number; apply/approve never call the
   // balance-check function for a type with this set
-  yearEndEncashment      Boolean               @default(false) @map("year_end_encashment") // true for PL only
+  yearEndEncashment      Boolean?              @map("year_end_encashment") // A (audit fix 2026-11-18): null = Not set (the year-end run refuses); true encashes what year end does not carry, false lets it lapse
 
   // Comp-off (COF only) — hours/expiry pending HR confirmation, see docs/PROGRESS.md open questions
   compOffMinHoursWorked Decimal? @map("comp_off_min_hours_worked") @db.Decimal(4, 2) // default 4.00
@@ -1240,12 +1249,16 @@ model YearEndRunItem {
   employeeId              String     @map("employee_id")
   employee                Employee   @relation(fields: [employeeId], references: [id])
   closingPlBalance        Decimal    @map("closing_pl_balance") @db.Decimal(5, 2)
-  encashedDays            Decimal    @map("encashed_days") @db.Decimal(5, 2) // == closingPlBalance (no cap today)
+  encashedDays            Decimal    @map("encashed_days") @db.Decimal(5, 2) // closing balance minus what is carried, when encashment is on
   dailyRate               Decimal    @map("daily_rate") @db.Decimal(10, 2) // resolved via EncashmentRateProvider
   // at preview time
   rateSource              String     @map("rate_source") // "MANUAL_SETTING" today; "SALARY_STRUCTURE" once
   // Phase 6 supplies a real provider — snapshot so switching providers never retroactively changes history
   encashedAmount          Decimal    @map("encashed_amount") @db.Decimal(12, 2)
+  // A (audit fix 2026-11-18): what year end carried into the new year (up to the policy's cap) and what lapsed (encashment off).
+  carriedForwardDays      Decimal    @default(0) @map("carried_forward_days") @db.Decimal(5, 2)
+  lapsedDays              Decimal    @default(0) @map("lapsed_days") @db.Decimal(5, 2)
+  ledgerLapseEntryId      String?    @unique @map("ledger_lapse_entry_id")
   ledgerEncashmentEntryId String?    @unique @map("ledger_encashment_entry_id") // set only once committed;
   // null on a mere preview — one ENCASHMENT ledger entry per employee, debiting the full balance to 0, IS
   // the "reset for the new year" — no separate reset entry needed
@@ -5817,6 +5830,22 @@ model PayrollParallelComparison {
   @@map("payroll_parallel_comparisons")
 }
 
+// Standard statutory defaults pack (docs/plans/STATUTORY_DEFAULTS_PLAN.md): each director's one-time acknowledgement and each later review. Append-only.
+enum StatutoryPackReviewKind {
+  ACKNOWLEDGED
+  REVIEWED
+}
+
+model StatutoryPackReview {
+  id          String                  @id @default(cuid())
+  kind        StatutoryPackReviewKind
+  packVersion Int                     @map("pack_version")
+  userId      String                  @map("user_id")
+  createdAt   DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([kind, createdAt])
+  @@map("statutory_pack_reviews")
+}
 // A-END
 // M-BEGIN (second session block 2, ER-27): divisions, an optional grouping of departments (an employee's division is their department's).
 model Division {
@@ -6236,3 +6265,39 @@ model EmployeeLegalEntity {
 }
 
 // M-END
+
+// LOGIN-BEGIN (employee-number login, docs/plans/LOGIN_CHECKLIST.md): a person asked for a password link (or HR tried to send a setup link) but has
+// no email on record, so nothing was sent. One row per employee; HR sees it on the employee screen and the pending-invitations list until an email
+// is added. Holds no token and no personal data beyond who it is about.
+model LoginEmailMissingNotice {
+  id              String   @id @default(cuid())
+  employeeId      String   @unique @map("employee_id")
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  requestCount    Int      @default(1) @map("request_count")
+  firstSeenAt     DateTime @default(now()) @map("first_seen_at") @db.Timestamptz(3)
+  lastRequestedAt DateTime @default(now()) @map("last_requested_at") @db.Timestamptz(3)
+
+  @@map("login_email_missing_notices")
+}
+// LOGIN-END
+
+// LATE-BEGIN (lateness rule, docs/plans/LATE_CHECKLIST.md §5): a manager asks HR to waive one late arrival; HR approves or rejects (never the requester,
+// never the employee). An approved waiver removes that arrival's consequence and returns its allowance. Decided rows never change (a trigger refuses).
+model LateWaiver {
+  id                String    @id @default(cuid())
+  employeeId        String    @map("employee_id")
+  employee          Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  date              DateTime  @db.Date
+  reason            String
+  status            String    @default("PENDING")
+  requestedByUserId String    @map("requested_by_user_id")
+  decidedByUserId   String?   @map("decided_by_user_id")
+  decidedAt         DateTime? @map("decided_at") @db.Timestamptz(3)
+  decisionNote      String?   @map("decision_note")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([employeeId, date])
+  @@index([status])
+  @@map("late_waivers")
+}
+// LATE-END

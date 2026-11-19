@@ -53,6 +53,11 @@ export const componentValueSchema = z
     inputDirection: z.enum(["EARNING", "DEDUCTION"]).optional(),
     /** Monthly input heads only. Whether a figure may be negative (a negative earning takes off, a negative deduction gives back). Absent is Not set; true or false is the director's choice. */
     inputAllowNegative: z.boolean().optional(),
+    /**
+     * PY-43 (docs/plans/STATUTORY_DEFAULTS_PLAN.md §4): an employer-contribution line that stands for the statutory employer PF or ESI. It reserves room in CTC only:
+     * a run never pays or costs it (the statutory engine's exact figure is the one used), so it can never be counted twice.
+     */
+    standsFor: z.enum(["PF_EMPLOYER", "ESI_EMPLOYER"]).optional(),
   })
   .strict()
   .superRefine((v, ctx) => {

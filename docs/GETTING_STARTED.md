@@ -135,7 +135,7 @@ except the two marked **required**.
 | `JWT_ACCESS_SECRET` | Signs short-lived access tokens | No (has a placeholder default) | change it before staging/production |
 | `JWT_REFRESH_SECRET` | Not itself used to sign anything (refresh tokens are opaque, DB-tracked), reserved for future use — must differ from `JWT_ACCESS_SECRET` | No | change it before staging/production |
 | `JWT_ACCESS_TTL` | Access token lifetime | No | `15m` |
-| `JWT_REFRESH_TTL` | Refresh token lifetime | No | `30d` |
+| ~~`JWT_REFRESH_TTL`~~ | Removed 2026-11-19: "Stay signed in" is a director setting (Default behaviours, two directors; default 30 days) | — | — |
 | `FIELD_ENCRYPTION_DRIVER` | `local` \| `kms`. `local` (development only) derives one static key from `KMS_FIELD_KEY_ID`; `kms` keeps the data keys wrapped by an AWS KMS key. Staging and production refuse to start on `local` | No | `local` |
 | `KMS_FIELD_KEY_ID` | **Encryption key** for bank account/PAN/Aadhaar/UAN (AES-256-GCM). Local dev derives a static key from this string; with `FIELD_ENCRYPTION_DRIVER=kms` it is the KMS key's ARN | No locally | see warning below |
 | `FIELD_KEYRING` | JSON of the *wrapped* data keys (`kms` driver only; not secret, but useless without `kms:Decrypt`). Rotation: `docs/DEPLOYMENT.md` "Field encryption keys" | Conditional | — |

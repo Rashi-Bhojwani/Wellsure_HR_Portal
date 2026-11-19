@@ -4,7 +4,7 @@ import path from "node:path";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { formatAttlogLine } from "@shared/attendance/attlog";
-import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
+import { deleteWithDependents, purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import { writeXls, type TestCell } from "../../../lib/__tests__/xlsWriter";
 import { setBusinessTodayForTests } from "../../../lib/businessDate";
 import { prisma } from "../../../lib/prisma";
@@ -41,6 +41,8 @@ describe("Stage 9 — a full month, rehearsed end to end", () => {
   let loanId = "";
   let leaveId = "";
   const comparisonIds: string[] = [];
+  const challanIds: string[] = [];
+  const startedAt = new Date();
   const tok: Record<string, string> = {};
   const who = (n: string) => world.named[n]!.employeeId;
   const code = (n: string) => world.named[n]!.employeeCode;
@@ -72,6 +74,13 @@ describe("Stage 9 — a full month, rehearsed end to end", () => {
     setRecomputeHandler(null);
     setCalculationEnqueuer(null);
     await deleteWithDependents("PayrollParallelComparison", comparisonIds);
+    await deleteWithDependents("StatutoryChallan", challanIds);
+    // The finalisation is for the whole August cycle, company-wide: the lock this test made (and its audit row) goes, or every later August test meets a
+    // finalised period (found by the Stage 9 full suite: muster, regularization and the attendance golden replay).
+    await deleteWithDependents("AttendancePeriodLock", (await prisma.attendancePeriodLock.findMany({ where: { periodStart: new Date(`${CYCLE.start}T00:00:00Z`), createdAt: { gte: startedAt } }, select: { id: true } })).map((r) => r.id));
+    await purgeAppendOnly("AuditLog", { entityId: `${CYCLE.start}..${CYCLE.end}`, createdAt: { gte: startedAt } });
+    expect(await prisma.attendancePeriodLock.count({ where: { periodStart: new Date(`${CYCLE.start}T00:00:00Z`), createdAt: { gte: startedAt } } })).toBe(0);
+    expect(await prisma.statutoryChallan.count({ where: { id: { in: challanIds } } })).toBe(0);
     await closeWorld(world);
     await deleteWithDependents("Device", [deviceId]);
     await deleteWithDependents("Shift", [shiftId]);
@@ -230,6 +239,7 @@ describe("Stage 9 — a full month, rehearsed end to end", () => {
     for (const [kind, ref] of [["PF", "ZZTRRN1000001"], ["ESI", "ZZESI10000001"], ["PT", "ZZPT100000001"]] as const) {
       const e = await api(maker(), "post", "/tax/statutory-challans", { kind, month: MONTH, depositedOn: "2026-09-10", amount: "100.00", reference: ref });
       expect(e.status, `${kind} ${JSON.stringify(e.body)}`).toBe(201);
+      challanIds.push(e.body.id);
       expect((await api(maker(), "post", `/tax/statutory-challans/${e.body.id}/confirm`, { amount: "100.00", reference: ref })).status).toBe(403);
       expect((await api(world.tokens.checkerA, "post", `/tax/statutory-challans/${e.body.id}/confirm`, { amount: "100.00", reference: ref })).status).toBe(200);
     }

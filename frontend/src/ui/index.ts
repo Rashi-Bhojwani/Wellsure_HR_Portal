@@ -20,3 +20,4 @@ export { Illustration, type IllustrationName } from "./Illustrations";
 export { InitialsAvatar } from "./Avatar";
 export { initialsOf } from "./avatarUtils";
 export { useIsPhone, useIsCompact, useDebouncedValue, usePrefersReducedMotion, isForbidden, isOffline, errorStatus } from "./hooks";
+export { BrandLogo, LOGO_SRC } from "./BrandLogo";

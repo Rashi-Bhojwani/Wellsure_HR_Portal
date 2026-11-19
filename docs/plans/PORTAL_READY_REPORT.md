@@ -1,6 +1,7 @@
 # Portal readiness report
 
-Branch `feat/hr-payroll-separation`, written 2026-11-10, updated 2026-11-11 and 2026-11-16 (Stage 9, with the go-live gap list in section 7) by the session continuing Session A. Public repository: no real data, no real
+Branch `feat/hr-payroll-separation`, written 2026-11-10, updated 2026-11-11 and 2026-11-16 (Stage 9, with the go-live gap list in section 7; then the standard
+statutory defaults pack, section 8) by the session continuing Session A. Public repository: no real data, no real
 person's name. **Every buildable item is now built**, including P7-6b off-cycle runs and the three D-37 defaults. Still open: eight A-items undefined in every plan
 file; Stage 8 blocked until the owner replaces the files on `origin/main` (they look like real exports; not brought here); Stages 6 and 9 not started on the
 owner's instruction (`PARITY_COVERAGE.md` was brought onto this branch by the parallel M session on 2026-11-11).
@@ -89,6 +90,11 @@ and off-cycle step is inside its budget (largest: 0.58 s against 1.6 s).
 - A TEAM-scope viewer of the roster grid; the five non-leave attendance-lock writers over their routes (wired; only leave apply exercised).
 - Stage 8 readers against real greytHR exports (only the synthetic samples and generated files were tried).
 
+**Verified on 2026-11-16 (Stage 9):** full backend suite alone on `aa1de7e`, 262 files / 2,268 tests, all passed (after fixing the rehearsal's cleanup, which
+had failed 9 later tests); CI run 396 on `aa1de7e` green on all 12 jobs; check script passed; browser walk of the changed upload and payroll screens, 5 roles ×
+1280 light / 390 dark (30 visits) and keyboard: damaged files refused in plain words, no crash, no server error, no secret text. The full-month rehearsal passes
+(12 steps). At 500 people everything is within budget after one fix (publishing payslips 1.88 s → 1.38 s against 1.6 s).
+
 **Verified on 2026-11-12 (Session A block):** see STAGE_REPORTS.md "Session A block". Full suite alone 239 files / 2,139 tests with 3 failures: one mine (fixed in
 `247096d`), two in the other session's files (`customFields` passes alone; `yearEndMoney` audit-viewer test broken since `ad5b3ca`). Not verified: the Form 16 PDF and
 the bank summary against any official or bank format (both are our own layouts); a real upload of the salary import by a director and its decision by the other
@@ -135,16 +141,18 @@ two directors enter and confirm it.
 
 **A. Owner values to enter (in the portal; the other director confirms each)**
 1. Director authority per payroll step (System Settings → Director authority).
-2. The tax year 2026-27: slabs, standard deduction, rebate, surcharge, cess, regime default, rounding, minimum monthly TDS, one-off taxation, section catalogue,
-   HRA exemption and marginal relief values; then `TDS_MODE` PROJECTED when ready.
-3. Statutory rules for the one state: PF, ESI, PT, LWF rates, ceilings and slabs; gratuity and notice-recovery values; overtime and encashment pay (spec §14).
-4. **How CTC is built: employer PF and ESI inside or outside CTC** (parity PY-43, the only open Tier 1 pay rule).
+2. **Now standard (section 8):** the tax year 2026-27 values ship in force; review the items marked "review needed", enter the HRA exemption heads, then
+   `TDS_MODE` PROJECTED when ready.
+3. **Now standard (section 8):** PF, ESI, PT and LWF for Rajasthan (not levied), gratuity, notice and encashment defaults; review the items marked "review
+   needed" and set the gratuity / notice / encashment head codes; overtime pay stays the directors' (spec §14).
+4. How CTC is built: employer PF and ESI are **inside CTC by default** now (PY-43, a director setting); change it only if offer letters say otherwise.
 5. Every earning head's taxability; Monthly Inputs heads' direction and negatives (D-31).
 6. Opening figures for the year (or confirm there are none) — income tax in a run does nothing until then.
 7. Company and branch registrations (PF, ESI, PT, TAN) and the company bank details.
 8. Bank layout from the bank's own specification (debit account, payment mode, remark), the payment date rule, the payslip link lifetime, the
    password-protected PDF approval.
-9. **The PF portal's current ECR format and the ESI portal's upload format** as layouts (parity ST-02, ST-05: the mechanism is built, the layout is typed by a director).
+9. The PF file now uses EPFO's published ECR 2.0 layout ("check against the portal before uploading"); **the ESI portal's upload format** is still a layout
+   for a director to type (not published).
 10. Loan and claim types (limits, rate, pay heads; "Principal Part" and "Interest Part" deduction heads).
 11. Admin Tools → Default behaviours: the three D-37 defaults to review; max total deduction %, pro-rata leave rounding, parallel-run tolerance and comparison
     retention to set.
@@ -170,3 +178,55 @@ DRAFT in our own layout (no official format). Buildable non-payroll rows (assets
 phone push, a manager step on claims) are listed in `PARITY_COVERAGE.md` (e).
 
 **Deployment** (outside this work): AWS, KMS keys, SES, the static IP for the biometric agent, staging timings with a pooled, loaded database.
+
+## 8. Standard statutory defaults (written 2026-11-16)
+
+Verified: full backend suite alone 263 files / 2,291 tests passed; CI run 418 on the final commit `451b178` green on all 12 jobs (run 417 failed once on a
+pre-existing flaky test, fixed); browser walk of the changed screens (5 roles x 1280 light / 390
+dark, 50 visits, keyboard acknowledgement) clean after one fix (390 sideways scroll from long source URLs).
+
+By the owners' decision statutory and tax values ship in force with their sources (`docs/STATUTORY_DEFAULTS.md`); payroll runs without the directors entering
+figures. Before the first real run: **both directors click "I have reviewed the standard values"** (Ready for First Run; a run that used them is refused until
+then), after reading the values marked review needed:
+
+- ~~Rajasthan professional tax, LWF and minimum wages~~: no longer loaded (section 9).
+- PF and ESI rounding; September 2026 PF (whole month on Rs 25,000).
+- Tax 2026-27: the standard deduction under the 2025 Act, one surcharge table (old regime's 37% and surcharge marginal relief not modelled), TDS policy
+  defaults, a short section catalogue.
+- ~~Gratuity, notice and encashment~~: no longer loaded (section 9).
+
+Not modelled (named): ESI Rs 176/day exemption and Rs 25,000 for persons with disability; PF Rs 500 minimum admin charge; fixed-term gratuity after one year.
+To try on the real portals: the PF ECR file (EPFO) and the ESI upload (format not published). Reminders come every 6 months (a setting) or when a value's date
+passes.
+
+## 9. Owner-decided settings ship empty (written 2026-11-17)
+
+Your decision: gratuity, notice pay and leave encashment (heads, notice period, encashment divisor, gratuity figures), the company's state, and that state's
+professional tax, LWF and minimum wages ship **Not set**; you set them. PF, ESI and income tax standard values, the PF ceiling dating, PY-43, the PF ECR file and
+the acknowledgement are unchanged. The researched values are kept, unused, in `docs/STATUTORY_DEFAULTS.md`, "Reference values, not loaded".
+
+| Owner to set | Until then | Where |
+|---|---|---|
+| Final settlement rules (gratuity, notice pay, leave encashment) | A final settlement and its guide are refused, naming each missing setting ("Gratuity salary head is not set. Choose it in settings."); a configured head missing from someone's salary is refused by name. Never a zero. | System Settings, Default behaviours, "Final settlement rules" |
+| The state, its PT and LWF tables | No PT or LWF deducted; the run, every payslip and Ready say "Professional Tax: not set" / "Labour Welfare Fund: not set" (never "not levied"). A monthly run is not blocked. | Default behaviours (state); Rules and setup (tables) |
+| Minimum wages | The check says Not set; it never changes pay. | Payroll, Minimum Wages |
+
+Ready for First Run shows each as an information row (never blocking) with a link to its screen. Verification: see `STAGE_REPORTS.md`, "Owner-decided settings
+ship empty".
+
+## 10. Audit fixes (written 2026-11-18)
+
+From the read-only audit of hard-coded values (commit `14ff0adf`). Owner to set before go-live, each refused until set (never a made-up figure): the leave type
+roles (earned / comp-off); the earned type's year-end carry-forward and encashment; an accruing type's days per month and eligibility; the comp-off minimum hours
+and expiry; the leave encashment amount (one value for year end, mid-year and exit). Leave days now follow each person's week-off pattern. The Developer sees no
+personal data. Times and limits that had no screen are on System Settings, Schedules and limits. Rows 141 to 151 of `OWNER_REVIEW_SHEET.md`; plan and the list of
+what was not built in `docs/plans/AUDIT_FIXES.md`. Verification: `STAGE_REPORTS.md`, "Audit fixes".
+
+## 11. Final merge (written 2026-11-19)
+
+`feat/employee-number-login`, `feat/lateness-rule` and `feat/wellsure-theme` are merged into `feat/hr-payroll-separation` (one conflict, both models kept;
+`docs/ops-and-decisions` does not exist). Owner to know before go-live:
+- the Forgot-password link lifetime and how long a person stays signed in are Default behaviours, two directors, "Default in use" (60 minutes, 30 days) until
+  changed;
+- the Developer no longer manages leave policies.
+Open, not caused by the merge: on Apply leave, the keyboard cannot move past the "From" date box. Report: `docs/plans/FINAL_MERGE_REPORT.md`.

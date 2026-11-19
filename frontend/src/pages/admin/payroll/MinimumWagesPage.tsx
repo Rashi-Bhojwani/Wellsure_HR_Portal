@@ -42,9 +42,9 @@ export function MinimumWagesPage() {
   const categories = [...new Set((setup.data?.rates ?? []).map((r) => r.category))];
   return (
     <>
-      <PageHeader title="Minimum wages" subtitle="Rates, categories and the compared pay heads are yours to enter; the check never changes pay." actions={<Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>Enter a rate</Button>} />
+      <PageHeader title="Minimum wages" subtitle="Standard rates for the company's state, or yours; categories and compared pay heads are yours to enter. The check never changes pay." actions={<Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>Enter a rate</Button>} />
       <Stack>
-        <ApprovalBanner tone="info" title="Nothing is preset" description={setup.data?.note ?? "Every value here is entered by a director with its source."} />
+        <ApprovalBanner tone="info" title="Standard rates for the company's state, and your entries" description={setup.data?.note ?? "Every value here is entered by a director with its source."} />
         <Panel title="Pay heads compared with the minimum" subtitle={basis ? `In force since ${dayjs(basis.setAt).format("D MMM YYYY")}: ${basis.source}` : "Not set"}>
           <div style={{ display: "flex", gap: space[2], flexWrap: "wrap", alignItems: "center" }}>
             <Select mode="multiple" aria-label="Pay heads" placeholder="Choose the pay heads" style={{ minWidth: 280, flex: 1 }} value={chosenHeads} onChange={setHeads} loading={comps.isLoading} options={(comps.data ?? []).filter((c) => c.value?.type === "EARNING").map((c) => ({ value: c.code, label: c.value?.payslipLabel ? `${c.value.payslipLabel} (${c.code})` : c.code }))} />

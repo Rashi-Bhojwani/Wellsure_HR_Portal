@@ -2,6 +2,8 @@ import fc from "fast-check";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
+import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
+import { setBehaviourByRoute, testEncashment, testGratuity, testNotice } from "./settlementRulesTestHelpers";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupFullTestEmployee, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { netOf } from "../offcycle/service";
@@ -71,6 +73,7 @@ describe("P7-6b — off-cycle runs over the routes", () => {
   let tokens: { hr: string; dev: string; employee: string };
   let heldItemId = "";
   let heldNet = "";
+  const proposalIds: string[] = [];
   let snapshot: Array<{ employeeId: string; status: string; netPay: string; gross: string }> = [];
   const who = (n: string) => world.named[n]!.employeeId;
   const oc = (token: string, method: "get" | "post", path: string, body?: object) => request(app)[method](`/api/offcycle${path}`).set(...authHeader(token)).send(body);
@@ -110,6 +113,7 @@ describe("P7-6b — off-cycle runs over the routes", () => {
     seam.ready = false;
     seam.demo = false;
     resetSeams();
+    await deleteWithDependents("BehaviourProposal", proposalIds);
     for (const x of [hr, dev]) if (x) await cleanupFullTestEmployee(x.employeeId);
     await closeWorld(world);
   }, 300_000);
@@ -245,6 +249,10 @@ describe("P7-6b — off-cycle runs over the routes", () => {
 
   it("a settlement: paid once, its pending adjustment marked paid by the off-cycle run (so no regular run pays it), and the demo company's file is DEMO only from a DEMO layout", async () => {
     const c = who("c");
+    // Changed 2026-11-17 (CHANGED_TESTS.md; owner decision: the settlement settings ship Not set and a settlement is refused until all three are set). The directors
+    // set them (one enters, the other confirms) so that no automatic line is added: notice recovery off, a gratuity nobody here qualifies for, no leave type encashed
+    // at exit. This test enters its own notice line, so every amount below is unchanged.
+    for (const [key, value] of [["payroll.noticeRecovery", testNotice(world.basic, { recoverShortfall: false })], ["payroll.gratuity", testGratuity(world.basic, { minYears: "40" })], ["payroll.leaveEncashment", testEncashment(world.basic, { exitLeaveTypes: [] })]] as const) proposalIds.push(await setBehaviourByRoute(world.tokens.maker, world.tokens.checkerA, key, value));
     const sep = await prisma.separation.create({ data: { employeeId: c, lastWorkingDate: day(CYCLE.end), reason: "test", initiatedByUserId: hr.userId } });
     const adj = await prisma.payrollAdjustment.create({ data: { employeeId: c, componentCode: "TEST_ANY", direction: "EARNING", amount: "1234.56", reason: "made-up arrears", source: "MANUAL", sourceRef: `offcycle-test-${c}`, createdByUserId: world.maker.userId } });
     const s = await request(app).post("/api/settlements").set(...authHeader(world.tokens.maker)).send({ separationId: sep.id, directorLines: [{ label: "Notice recovery", amount: "-200.10", source: "made-up: the notice shortfall" }] });

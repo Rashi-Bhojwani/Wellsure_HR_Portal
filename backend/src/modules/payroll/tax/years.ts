@@ -3,6 +3,7 @@ import { requireDirector } from "../../../lib/directorAuthority";
 import { HttpError } from "../../../middleware/errorHandler";
 import { payrollHash } from "../hash";
 import { appendVersion, confirmVersion, editFingerprint, keysIn, loadItems, previewConfirmation, summarise, type ItemStatus, type VersionView } from "../items";
+import { PACK_TAX_YEARS, PACK_VERSION } from "@shared/constants/statutoryDefaults";
 import { InvalidTaxValueError, missingForTds, parseTaxYearValue, type TaxYearValue } from "./schema";
 
 // A tax year as a governed item (docs/plans/STAGE_7_PLAN.md). Directors only: HR, managers, employees and the Developer role never see it. An entry is a Placeholder until a different
@@ -23,6 +24,8 @@ export interface TaxYearView {
   lastConfirmed: VersionView | null;
   /** What the year still lacks before a TDS can be worked out under both regimes, in words. */
   missing: string[];
+  /** Standard defaults pack: the standard year, and whether payroll uses it (no director version is confirmed). */
+  standard: { inUse: boolean; value: TaxYearValue; verification: string; unverifiedParts: string[] } | null;
 }
 
 const label = (raw: string): string => {
@@ -46,13 +49,16 @@ function toView(year: string, data: Awaited<ReturnType<typeof loadItems>>): TaxY
   const fy = parseFinancialYearLabel(year);
   const s = summarise(data, year);
   const value = (s.current?.value as TaxYearValue | undefined) ?? null;
-  return { year, start: fy.start, end: fy.end, value, status: s.status, sourceLabel: s.sourceLabel, current: s.current, lastConfirmed: s.lastConfirmed, missing: missingForTds(value) };
+  const std = packTaxYear(year);
+  const inUse = Boolean(std) && !s.current;
+  return { year, start: fy.start, end: fy.end, value, status: s.status, sourceLabel: s.sourceLabel, current: s.current, lastConfirmed: s.lastConfirmed, missing: inUse ? [] : missingForTds(value), standard: std ? { inUse, ...std } : null };
 }
 
 export async function listTaxYears(actor: Actor): Promise<TaxYearView[]> {
   await requireDirector(actor.userId, "see the tax years");
   const data = await loadItems(KIND);
-  return keysIn(data).map((k) => toView(k, data));
+  // Standard defaults pack: a standard year nobody has entered is listed too (it is the one payroll uses).
+  return [...new Set([...keysIn(data), ...Object.keys(PACK_TAX_YEARS)])].sort().map((k) => toView(k, data));
 }
 
 export async function getTaxYear(yearRaw: string, actor: Actor): Promise<{ year: TaxYearView; history: VersionView[] }> {
@@ -112,9 +118,23 @@ export async function confirmTaxYear(yearRaw: string, input: { version: number; 
   return (await getTaxYear(year, actor)).year;
 }
 
-/** The year as the engine reads it: the current version if it is confirmed, with its version and hash for pinning. Null when nobody entered it, or when the current version is only a Placeholder. */
-export async function taxYearForEngine(year: string): Promise<{ value: TaxYearValue; version: number; valueHash: string; confirmed: boolean } | null> {
+/**
+ * The year as the engine reads it: the current version (confirmed, or a Placeholder) as before. Standard defaults pack (docs/plans/STATUTORY_DEFAULTS_PLAN.md): a year
+ * nobody has entered uses the pack's standard year if it has one (`pack: true`, in force); otherwise null.
+ */
+export async function taxYearForEngine(year: string): Promise<{ value: TaxYearValue; version: number; valueHash: string; confirmed: boolean; pack?: true } | null> {
   const s = summarise(await loadItems(KIND, [year]), year);
-  if (!s.current) return null;
-  return { value: s.current.value as TaxYearValue, version: s.current.version, valueHash: s.current.valueHash, confirmed: s.status === "CONFIRMED" };
+  if (s.current) return { value: s.current.value as TaxYearValue, version: s.current.version, valueHash: s.current.valueHash, confirmed: s.status === "CONFIRMED" };
+  const packYear = PACK_TAX_YEARS[year];
+  if (packYear) {
+    const value = parseTaxYearValue(packYear.value);
+    return { value, version: PACK_VERSION, valueHash: `pack:${PACK_VERSION}:TAX_YEAR:${year}:${payrollHash(value)}`, confirmed: true, pack: true };
+  }
+  return null;
+}
+
+/** The standard tax year a director has not replaced, for the screens (null when the pack has no year of that name). */
+export function packTaxYear(year: string): { value: TaxYearValue; verification: string; unverifiedParts: string[] } | null {
+  const p = PACK_TAX_YEARS[year];
+  return p ? { value: parseTaxYearValue(p.value), verification: p.verification, unverifiedParts: p.unverifiedParts } : null;
 }

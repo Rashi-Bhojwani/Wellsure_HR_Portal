@@ -103,8 +103,10 @@ describe("the setup checklist and the readiness screen", () => {
     expect(optional).toEqual(expect.arrayContaining(["rule:TAN", "rule:ENCASH_TAXABLE", "layout:PF_ECR"]));
     expect(ids).not.toContain("rule:TAN");
     expect(ids).not.toContain("layout:PF_ECR");
-    // The shipped placeholders need a director's confirmation: they are blockers too.
-    expect(ids).toContain("rule:PF_EMPLOYEE_RATE");
+    // Changed 2026-11-16 (standard defaults pack, CHANGED_TESTS.md): a statutory rate nobody entered now stands on its standard, sourced value (in force), so it is no
+    // longer a blocker; the directors' acknowledgement of the standard values is.
+    expect(ids).not.toContain("rule:PF_EMPLOYEE_RATE");
+    expect(ids).toContain("pack:acknowledgement");
   });
 
   it("people's data: Not set, then partial with the people who lack it named, then complete but not checked", async () => {

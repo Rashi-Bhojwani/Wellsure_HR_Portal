@@ -11,7 +11,8 @@ import { storageService } from "../../../integrations/storage";
 import { recordEvent } from "../events";
 import { canonicalDecimal, dec, ZERO } from "../money";
 import { buildRunWorkbook } from "./export";
-import { renderLayout, type LayoutKind, type LayoutRow } from "./layout";
+import { PACK_ECR_LAYOUT, PACK_VERSION } from "@shared/constants/statutoryDefaults";
+import { parseLayout, renderLayout, type LayoutKind, type LayoutRow } from "./layout";
 import { currentLayout, layoutReady } from "./layouts";
 
 // The statutory files and the register, made from a FINAL run (docs/plans/PHASE_6.md §10, §14H). The four statutory files (PF, ESI, PT, LWF) come from a layout that has
@@ -108,8 +109,10 @@ export async function generateOutput(runId: string, kind: PayrollOutputKind, act
     rowCount = run.payableCount + run.heldCount;
   } else {
     const ready = await layoutReady(kind);
-    if (!ready.ready) throw new HttpError(409, ready.status === "NOT_SET" ? "The layout for this file has not been entered yet. It comes from the layout the portal or your state currently accepts; once entered, a second person must confirm it." : "The layout for this file has been entered but not confirmed by a second person yet, so the file cannot be made.", "LAYOUT_NOT_CONFIRMED");
-    const stored = await currentLayout(kind);
+    // Standard defaults pack: with no director-confirmed PF layout, EPFO's published ECR 2.0 layout is used (labelled "check against the portal before uploading").
+    const standardEcr = kind === "PF_ECR" && !ready.ready;
+    if (!ready.ready && !standardEcr) throw new HttpError(409, ready.status === "NOT_SET" ? "The layout for this file has not been entered yet. It comes from the layout the portal or your state currently accepts; once entered, a second person must confirm it." : "The layout for this file has been entered but not confirmed by a second person yet, so the file cannot be made.", "LAYOUT_NOT_CONFIRMED");
+    const stored = standardEcr ? { version: 0, valueHash: `pack:${PACK_VERSION}:PF_ECR`, value: parseLayout("PF_ECR", PACK_ECR_LAYOUT.value) } : await currentLayout(kind);
     const items = await loadItems(runId);
     const names = await namesOn(items.map((i) => i.employeeId), run.cycleEnd);
     const built = build(kind, items, names);
@@ -118,9 +121,9 @@ export async function generateOutput(runId: string, kind: PayrollOutputKind, act
     const file = await renderLayout(LAYOUT_OF[kind], stored!.value, built.rows, { count: built.rows.length, total, period: run.cycleLabel });
     bytes = file.bytes;
     contentType = file.contentType;
-    fileName = `${kind.toLowerCase()}-${cycle}.${file.extension}`;
+    fileName = standardEcr ? `pf_ecr-${cycle}-standard-check-against-portal.${file.extension}` : `${kind.toLowerCase()}-${cycle}.${file.extension}`;
     rowCount = built.rows.length;
-    template = { version: stored!.version, valueHash: stored!.valueHash };
+    template = standardEcr ? null : { version: stored!.version, valueHash: stored!.valueHash };
     revealed = built.revealed;
   }
   const sha = createHash("sha256").update(bytes).digest("hex");
@@ -141,7 +144,10 @@ const outputView = (o: { id: string; kind: PayrollOutputKind; rowCount: number; 
 export async function listOutputs(runId: string) {
   const rows = await prisma.payrollOutput.findMany({ where: { runId }, orderBy: { generatedAt: "desc" } });
   const readiness = await Promise.all((["PF_ECR", "ESI", "PT", "LWF"] as const).map(async (k) => ({ kind: k, ...(await layoutReady(k)) })));
-  return { outputs: rows.map(outputView), layouts: readiness.map((r) => ({ kind: r.kind, ready: r.ready, status: r.status })) };
+  return {
+    outputs: rows.map(outputView),
+    layouts: readiness.map((r) => (r.kind === "PF_ECR" && !r.ready ? { kind: r.kind, ready: true, status: "STANDARD" as const, note: `Standard layout (${PACK_ECR_LAYOUT.source.name}). ${PACK_ECR_LAYOUT.note}` } : { kind: r.kind, ready: r.ready, status: r.status })),
+  };
 }
 
 export async function downloadOutput(id: string, actor: Actor) {

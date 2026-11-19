@@ -173,3 +173,7 @@ export async function downloadGuardedAttachment(id: string, fileName: string): P
   } finally { URL.revokeObjectURL(url); }
 }
 // PEEPS-END helpdesk-visibility
+/** Audit A-18 (2026-11-18): how many files one message may carry (a director setting; default 3). */
+export async function getHelpdeskLimits(): Promise<{ maxAttachmentsPerMessage: number }> {
+  return (await apiClient.get<{ maxAttachmentsPerMessage: number }>("/api/helpdesk/limits")).data;
+}

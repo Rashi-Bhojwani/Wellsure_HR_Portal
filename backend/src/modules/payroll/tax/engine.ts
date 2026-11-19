@@ -121,7 +121,8 @@ export function computeAnnualTax(input: EngineInput): EngineResult {
   }
   const rebate = income.lessThanOrEqualTo(dec(rebateDef.thresholdIncome)) ? min(slabTax, dec(rebateDef.maximum)) : ZERO;
   // Part 4 (ST-18): marginal relief on the rebate, once the tax year says so: just above the threshold, tax after the rebate is never more than the income above it.
-  const reliefOn = input.year.marginalReliefOnRebate?.value === true && income.greaterThan(dec(rebateDef.thresholdIncome));
+  // The relief is the new regime's only (the rebate provision gives it to income charged at the new regime's rates); the old regime's rebate has none.
+  const reliefOn = input.regime === "NEW" && input.year.marginalReliefOnRebate?.value === true && income.greaterThan(dec(rebateDef.thresholdIncome));
   const relieved = reliefOn ? min(slabTax.minus(rebate), income.minus(dec(rebateDef.thresholdIncome))) : null;
   const afterRebate = relieved ?? slabTax.minus(rebate);
   const band = surchargeTable.find((s) => income.greaterThanOrEqualTo(dec(s.from)) && (s.to === null || income.lessThan(dec(s.to))));

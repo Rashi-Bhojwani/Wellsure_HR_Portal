@@ -1,12 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
-import { salaryOn } from "../../../lib/effectiveDating";
-import { EncashmentRateNotConfiguredError, SettingsBasedEncashmentRateProvider, setEncashmentRateProvider, type EncashmentRateProvider, type EncashmentRateResult } from "../../leave/encashmentRate";
-import { FormulaError, evaluateFormula } from "../formula";
-import { ZERO, canonicalDecimal, dec, intDec, max, roundTo, sum, type Money } from "../money";
-import { RuleContext, RuleNotSetError, pinStatuses, type RulePin } from "../rules/context";
-import type { RoundingRule } from "../salary/breakup";
+import { EncashmentRateNotConfiguredError, setEncashmentRateProvider, type EncashmentRateProvider, type EncashmentRateResult } from "../../leave/encashmentRate";
+import { behaviourValue } from "../../behaviours/service";
+import { salariesOn } from "../../../lib/effectiveDating";
+import { encashmentAmount } from "../payPolicies/arith";
+import { SALARY_HEAD_NOT_FOUND, headRefusalText, missingHeads } from "../payPolicies/service";
+import { ZERO, canonicalDecimal, dec, fixed, intDec, max, sum } from "../money";
 import { setArrearsBasisProvider, type ArrearsBasisProvider, type PaidShare } from "../salary/arrears";
 import { countDays, iso } from "./days";
 
@@ -46,39 +46,26 @@ export const finalisedRunArrearsProvider: ArrearsBasisProvider = {
   },
 };
 
-// ── The daily rate for year-end leave encashment, from the person's salary ──
-// The formula is the rule ENCASH_DAILY_RATE_FORMULA, evaluated over the lines of the salary in force on the year-end date (BASIC / 30 is the specification's
-// suggestion, never shipped as a value). `isFinal` is true only when that exact version of the rule is Confirmed. Until the rule has a value this defers to the flat
-// rate HR entered in Phase 4, with its source recorded as before, so the Year End screen behaves exactly as it did until payroll is set up.
+// ── The value of a leave day, from the person's salary (audit fix 2026-11-18, docs/plans/AUDIT_FIXES.md item 4) ──
+// One setting for year-end, mid-year and exit encashment alike: Default behaviours, "Leave encashment amount" (payroll.leaveEncashment): the heads of the salary in
+// force on the day, divided by the chosen divisor (a fixed number of days or the month's calendar days), with its rounding, once at the end. Not set: refused, naming
+// it. A chosen head missing from the salary: refused, naming the head. There is no flat-rupee fallback and no other formula.
 export class SalaryBasedEncashmentRateProvider implements EncashmentRateProvider {
-  constructor(private readonly fallback: EncashmentRateProvider = new SettingsBasedEncashmentRateProvider()) {}
-
   async getDailyRate(employeeId: string, asOfDate: Date): Promise<EncashmentRateResult> {
-    const ctx = await RuleContext.load();
-    if (ctx.peek<string>("ENCASH_DAILY_RATE_FORMULA") === undefined) return this.fallback.getDailyRate(employeeId, asOfDate);
-    const formula = ctx.rule<string>("ENCASH_DAILY_RATE_FORMULA");
-    let rounding: RoundingRule;
-    try {
-      rounding = ctx.rule<RoundingRule>("LINE_ROUNDING");
-    } catch (err) {
-      if (err instanceof RuleNotSetError) throw new EncashmentRateNotConfiguredError();
-      throw err;
-    }
-    if (rounding.mode === "NONE") throw new HttpError(409, 'The rule "Rounding of salary lines" is set to no rounding, so a daily rate cannot be rounded to the paisa. Choose a rounding mode for it.', "ROUNDING_NONE");
-    const row = await salaryOn(employeeId, asOfDate);
-    if (!row) throw new HttpError(409, `One person has no salary on ${iso(asOfDate)}, so their leave encashment rate cannot be worked out from the salary. Give them a salary, or clear the rule "Encashment: daily rate formula" to use the flat rate.`, "ENCASHMENT_NO_SALARY", { employeeId });
-    const vars: Record<string, Money> = { CTC: dec(row.monthlyCtc.toString()), ANNUAL_CTC: dec(row.annualCtc.toString()) };
-    for (const l of row.lines) vars[l.componentCode] = dec(l.amount.toString());
-    let rate: Money;
-    try {
-      rate = evaluateFormula(formula, vars);
-    } catch (err) {
-      if (err instanceof FormulaError) throw new HttpError(409, `The encashment formula "${formula}" cannot be worked out for one person: ${err.message}`, "ENCASHMENT_FORMULA", { employeeId });
-      throw err;
-    }
-    const pin = ctx.pins().find((p: RulePin) => p.key === "ENCASH_DAILY_RATE_FORMULA")!;
-    const [status] = await pinStatuses([pin]);
-    return { amount: new Prisma.Decimal(canonicalDecimal(roundTo(rate, 2, rounding.mode))), source: "SALARY_STRUCTURE", isFinal: status?.status === "CONFIRMED" };
+    return this.amountFor(employeeId, asOfDate, new Prisma.Decimal(1));
+  }
+
+  async amountFor(employeeId: string, asOfDate: Date, days: Prisma.Decimal): Promise<EncashmentRateResult> {
+    const setting = (await behaviourValue("payroll.leaveEncashment")).value;
+    if (!setting) throw new EncashmentRateNotConfiguredError();
+    const salary = (await salariesOn([employeeId], asOfDate)).get(employeeId);
+    if (!salary) throw new HttpError(409, `One person has no salary on ${iso(asOfDate)}, so the value of their leave days cannot be worked out. Give them a salary first.`, "ENCASHMENT_NO_SALARY", { employeeId });
+    const lines = salary.lines.map((l) => ({ componentCode: l.componentCode, amount: l.amount.toString() }));
+    const missing = missingHeads(lines, setting.basisHeads);
+    if (missing.length) throw new HttpError(409, headRefusalText(missing), SALARY_HEAD_NOT_FOUND, { use: "ENCASHMENT", heads: missing, employeeId });
+    const dim = new Date(Date.UTC(asOfDate.getUTCFullYear(), asOfDate.getUTCMonth() + 1, 0)).getUTCDate();
+    const amount = encashmentAmount(canonicalDecimal(dec(days.toString())), lines, setting.basisHeads, setting.divisor, dim, setting.rounding);
+    return { amount: new Prisma.Decimal(fixed(amount, 2)), source: "SALARY_STRUCTURE", isFinal: true };
   }
 }
 

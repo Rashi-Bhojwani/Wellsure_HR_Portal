@@ -118,7 +118,9 @@ describe("governed rules in the database", () => {
   });
 
   it("a figure an older build shipped 'from memory' (authored by nobody) is never a value: the rule is Not set, and a director's entry replaces it", async () => {
-    const key = "PF_EDLI_RATE";
+    // Changed 2026-11-16 (standard defaults pack, CHANGED_TESTS.md): PF_EDLI_RATE now has a standard value, so a rule nobody entered is read from the pack; the same
+    // property is checked on a rule with no standard value (a money amount; a key no other test in this file uses).
+    const key = "VARIANCE_FLAG_MIN_AMOUNT";
     await prisma.payrollItemVersion.create({ data: { kind: "RULE", key, version: 1, value: "0.5", valueHash: "payroll-hash-v1:legacy", note: PLACEHOLDER_SOURCE_LABEL, authorUserId: null } });
     try {
       expect((await getRule(key)).rule.status).toBe("NOT_SET");

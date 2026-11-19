@@ -398,7 +398,7 @@ const lop: Definition = async (q, pop) => {
     // A one-day overlap on the request's last day takes that day's half.
     const singlePart = oFrom.getTime() === r.fromDate.getTime() ? r.fromDayPart : endPart;
     const ctx = await resolveDayCountContext(r.employeeId, oFrom, oTo);
-    const days = computeTotalLeaveDays(oFrom, oTo, single ? singlePart : startPart, single ? singlePart : endPart, ctx.holidayDates, ctx.weekOffDays);
+    const days = computeTotalLeaveDays(oFrom, oTo, single ? singlePart : startPart, single ? singlePart : endPart, ctx.excludedDates, []);
     if (days.lessThanOrEqualTo(0)) continue;
     const entry = byEmployee.get(r.employeeId) ?? { row: personCells(r.employee, p), days: new Prisma.Decimal(0), spans: [], requests: 0 };
     entry.days = entry.days.plus(days);

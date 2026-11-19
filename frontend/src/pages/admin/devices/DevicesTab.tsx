@@ -107,7 +107,7 @@ export function DeviceDrawer({ editing, open, onClose }: { editing: DeviceRow | 
           </Col>
         </Row>
         <p style={{ color: v.textSecondary, fontSize: fs.sm, marginTop: -space[3], marginBottom: space[4] }}>
-          How much the device keeps before old punches may be overwritten. Pessimistic (3 days, 20,000) until the model is known: if the device isn&apos;t read for half of this, a
+          How much the device keeps before old punches may be overwritten. Default in use for a new device: 3 days and 20,000 records (deliberately pessimistic), until the device model is known (an open question, spec §14); change them for the real model: if the device isn&apos;t read for half of this, a
           warning shows; at three quarters, an alarm. When the device reports its own capacity, that figure is used instead of the records.
         </p>
         <Form.Item name="timezone" label="Device clock timezone" rules={[{ required: true }]} extra="The device records local time with no zone; it is read in this one.">

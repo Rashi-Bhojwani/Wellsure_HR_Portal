@@ -77,6 +77,11 @@ export function PayslipView({ content: c, watermark, masked }: { content: Paysli
         </div>
         {!masked && <div style={{ color: v.textBody, marginTop: space[1] }}>{c.netInWords}</div>}
       </section>
+      {(c.notices ?? []).length > 0 && (
+        <div role="note" style={{ color: v.textBody, fontSize: fs.sm }}>
+          {(c.notices ?? []).join(" · ")}. Nothing is deducted for {(c.notices ?? []).length === 1 ? "it" : "them"} (this is not the same as not levied).
+        </div>
+      )}
       {c.ytd && <div style={{ color: v.textSecondary, fontSize: fs.sm }}>Year to date: financial year {c.ytd.financialYear}, from payroll runs in this system only.</div>}
       {c.employerContributions.length > 0 && !masked && (
         <div style={{ color: v.textSecondary, fontSize: fs.md }}>

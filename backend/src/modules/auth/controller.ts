@@ -4,6 +4,7 @@ import { verifyTotpChallengeToken } from "../../lib/jwt";
 import { HttpError } from "../../middleware/errorHandler";
 import * as authService from "./service";
 import type { LoginResult, RequestMetaInput } from "./types";
+import { FORGOT_PASSWORD_REPLY } from "@shared/constants/login";
 
 const REFRESH_COOKIE = "refreshToken";
 
@@ -30,9 +31,8 @@ function clearRefreshCookie(res: Response): void {
 
 function sendLoginResult(res: Response, result: LoginResult): void {
   if (result.status === "authenticated") {
-    // 30d matches JWT_REFRESH_TTL's default; the cookie's actual expiry
-    // is driven by the token row itself, this is just the browser-facing copy.
-    setRefreshCookie(res, result.refreshToken, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+    // The cookie expires exactly when the token row does ("Stay signed in", Default behaviours).
+    setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
     res.status(200).json({ accessToken: result.accessToken, user: result.user });
     return;
   }
@@ -56,8 +56,8 @@ export async function refresh(req: Request, res: Response): Promise<void> {
   if (!presented) {
     throw new HttpError(401, "No session found.", "INVALID_REFRESH_TOKEN");
   }
-  const { accessToken, refreshToken } = await authService.refresh(presented, requestMeta(req));
-  setRefreshCookie(res, refreshToken, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+  const { accessToken, refreshToken, refreshExpiresAt } = await authService.refresh(presented, requestMeta(req));
+  setRefreshCookie(res, refreshToken, refreshExpiresAt);
   res.status(200).json({ accessToken });
 }
 
@@ -98,8 +98,8 @@ export async function acceptInvitation(req: Request, res: Response): Promise<voi
 export async function forgotPassword(req: Request, res: Response): Promise<void> {
   const { employeeCode } = req.body as { employeeCode: string };
   await authService.forgotPassword(employeeCode, requestMeta(req));
-  // Identical response regardless of whether employeeCode exists.
-  res.status(200).json({ message: "If that Employee Code exists, a reset link has been sent to the email on file." });
+  // Identical response regardless of whether the employee number exists, has an email, is invited or active (owner's wording, 2026-11-17).
+  res.status(200).json({ message: FORGOT_PASSWORD_REPLY });
 }
 
 export async function resetPassword(req: Request, res: Response): Promise<void> {
@@ -151,7 +151,7 @@ export async function verifyTotp(req: Request, res: Response): Promise<void> {
     // This was the login-time setup challenge — finish logging in now.
     const result = await authService.completeLoginAfterTotpSetup(userId, requestMeta(req));
     if (result.status === "authenticated") {
-      setRefreshCookie(res, result.refreshToken, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+      setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
       res.status(200).json({ accessToken: result.accessToken, user: result.user, backupCodes });
       return;
     }

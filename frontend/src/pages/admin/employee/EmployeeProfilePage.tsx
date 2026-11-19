@@ -15,6 +15,7 @@ import { InvitationStatus } from "../../../components/common/InvitationStatus";
 // PEEPS-BEGIN avatars
 import { ProfilePhoto } from "../../../features/avatars/ProfilePhoto";
 // PEEPS-END
+import { ChangeEmployeeCodeButton, LoginIdLabel, LoginIdNotices } from "./LoginIdPanel";
 import { EmployeeDocumentsTab } from "./EmployeeDocumentsTab";
 import { EmployeeAccessTab } from "../../../components/access/EmployeeAccessTab";
 import { EmptyState, PageHeader, QueryState, SideDrawer, Skel, SkeletonCard, StatusChip, Timeline, toast, type TimelineItem } from "../../../ui";
@@ -32,6 +33,8 @@ import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 // A-9 — end
 
 const REFERENCE_STALE = 30_000;
+// Invited: the account exists with no password yet (they set one with a setup link or "Forgot password"). Active: they have signed in.
+const ACCOUNT_STATUS_LABEL: Record<string, string> = { INVITED: "Invited", ACTIVE: "Active", SUSPENDED: "Suspended", DEACTIVATED: "Deactivated" };
 
 function OfficialTab({ profile, onEditJob }: { profile: employeeApi.EmployeeProfile; onEditJob?: () => void }) {
   // ER-27 (M session block 2): shown only once the company has divisions; it is the department's.
@@ -39,10 +42,11 @@ function OfficialTab({ profile, onEditJob }: { profile: employeeApi.EmployeeProf
   const division = divisionOfDepartment(divisions.data, profile.job?.department.id);
   return (
     <SectionStack>
-      <ProfileSection title="Employment information">
+      <ProfileSection title="Employment information" extra={<ChangeEmployeeCodeButton profile={profile} />}>
         <Grid
           items={[
-            { label: "Employee Code", value: profile.employeeCode },
+            { label: <LoginIdLabel profile={profile} />, value: <span data-testid="login-id">{profile.employeeCode}</span> },
+            ...(profile.attendanceCapture === "DEVICE" ? [{ label: "ID on the attendance machine", value: profile.deviceUserId ?? "—" }] : []),
             { label: "Status", value: <StatusChip status={profile.status} /> },
             { label: "Date of Joining", value: profile.dateOfJoining },
             { label: "Last Working Date", value: profile.lastWorkingDate ?? "—" },
@@ -50,6 +54,7 @@ function OfficialTab({ profile, onEditJob }: { profile: employeeApi.EmployeeProf
             { label: "Official Email", value: profile.officialEmail ?? "—" },
           ]}
         />
+        <LoginIdNotices profile={profile} />
       </ProfileSection>
       <ProfileSection title="Job" onEdit={onEditJob} editLabel="Change job details">
         <Grid
@@ -67,7 +72,7 @@ function OfficialTab({ profile, onEditJob }: { profile: employeeApi.EmployeeProf
       <ProfileSection title="Account and attendance">
         <Grid
           items={[
-            { label: "Account Status", value: profile.accountStatus ?? "—" },
+            { label: "Account Status", value: ACCOUNT_STATUS_LABEL[profile.accountStatus ?? ""] ?? profile.accountStatus ?? "—" },
             { label: "2FA", value: profile.totpEnabled ? "Enabled" : "Not enabled" },
             {
               label: "Attendance capture",
@@ -78,7 +83,7 @@ function OfficialTab({ profile, onEditJob }: { profile: employeeApi.EmployeeProf
         />
         {profile.invitation && (
           <div style={{ marginTop: space[5] }}>
-            <div style={{ color: v.textSecondary, fontSize: fs.md, marginBottom: space[2] }}>Invitation email</div>
+            <div style={{ color: v.textSecondary, fontSize: fs.md, marginBottom: space[2] }}>Setup link</div>
             <InvitationStatus employeeId={profile.id} invitation={profile.invitation} />
           </div>
         )}
@@ -93,7 +98,7 @@ function PersonalTab({ profile }: { profile: employeeApi.EmployeeProfile }) {
   const contact = useContactReveal(profile.id);
   if (!profile.personal) return <EmptyState compact title="No personal details on file." description={null} />;
   const personal = contact.revealed ? { ...profile.personal, mobile: contact.revealed.mobile, emergencyContactPhone: contact.revealed.emergencyContactPhone } : profile.personal;
-  const s = personalSections(personal);
+  const s = personalSections(personal, profile.personalHidden === true);
   return (
     <SectionStack>
       <ProfileSection title="Personal info" extra={profile.contactMasked && !contact.revealed && hasPermission("employee.contact.reveal") ? contact.button : undefined}>

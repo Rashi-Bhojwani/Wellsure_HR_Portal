@@ -4,9 +4,9 @@ import { writeAuditLog } from "../../lib/audit";
 import { DIRECTOR_2FA_SETTING_KEY, directorTwoFactorRequired, isDirector } from "../../lib/directorAuthority";
 import { recordDirectorNotice, scheduleDelivery } from "../../lib/directorNotices";
 import { prisma } from "../../lib/prisma";
-import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type LeaveSettings, type RateLimitSetting, type SecuritySettings } from "./types";
+import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type RateLimitSetting, type SecuritySettings } from "./types";
 import type { z } from "zod";
-import type { updateDeviceAlertSettingsSchema, updateRegularizationSettingsSchema, updateExcessHoursSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updateLeaveSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
+import type { updateDeviceAlertSettingsSchema, updateRegularizationSettingsSchema, updateExcessHoursSettingsSchema, updateDeviceHealthSettingsSchema, updateHelpdeskSettingsSchema, updatePeopleDocumentsSettingsSchema, updateSettingsSchema } from "./validators";
 import type { DeviceHealthThresholds } from "@shared/attendance/agentProtocol";
 import { DEVICE_ALERT_SETTING_KEY, getDeviceAlertSettings, type DeviceAlertSettings } from "../../lib/deviceAlertSettings";
 import { getRegularizationSettings, REGULARIZATION_SETTING_KEY, type RegularizationSettings } from "../../lib/regularizationSettings";
@@ -34,6 +34,7 @@ const RATE_LIMIT_SETTING_KEY: Record<(typeof RATE_LIMIT_KEYS)[number], string> =
   totpVerify: "auth.rateLimit.totpVerify",
   inviteAccept: "auth.rateLimit.inviteAccept",
   forgotPassword: "auth.rateLimit.forgotPassword",
+  forgotPasswordPerLogin: "auth.rateLimit.forgotPasswordPerLogin",
   resetPassword: "auth.rateLimit.resetPassword",
 };
 
@@ -41,7 +42,7 @@ export async function getSettings(): Promise<SecuritySettings> {
   const [lockout, passwordMinLength, invitationTtlHours, require2faRoles, requireDirectorTwoFactor, ...rateLimitValues] = await Promise.all([
     getSetting("auth.lockout", { maxAttempts: 5, lockoutMinutes: 15 }),
     getSetting("auth.passwordMinLength", 8),
-    getSetting("auth.invitationTtlHours", 48),
+    getSetting("auth.invitationTtlHours", 168), // 7 days: the setup link HR sends (auth/service.ts DEFAULT_INVITATION_TTL_HOURS)
     getSetting<string[]>("auth.require2faRoles", default2faRoles()),
     directorTwoFactorRequired(),
     ...RATE_LIMIT_KEYS.map((k) => getSetting<RateLimitSetting>(RATE_LIMIT_SETTING_KEY[k], RATE_LIMIT_DEFAULTS[k])),
@@ -99,23 +100,6 @@ export async function updateSettings(input: UpdateInput, meta: { actorUserId: st
 
   const after = await getSettings();
   await auditSettingsChange({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "security", before, after });
-  return after;
-}
-
-export async function getLeaveSettings(): Promise<LeaveSettings> {
-  const encashmentDefaultDailyRate = await getSetting<number | null>("leave.encashment.defaultDailyRate", null);
-  return { encashmentDefaultDailyRate };
-}
-
-type UpdateLeaveInput = z.infer<typeof updateLeaveSettingsSchema>;
-
-export async function updateLeaveSettings(input: UpdateLeaveInput, meta: { actorUserId: string; ipAddress?: string | null; userAgent?: string | null }): Promise<LeaveSettings> {
-  const before = await getLeaveSettings();
-  if (input.encashmentDefaultDailyRate !== undefined) {
-    await setSetting("leave.encashment.defaultDailyRate", input.encashmentDefaultDailyRate, meta.actorUserId);
-  }
-  const after = await getLeaveSettings();
-  await auditSettingsChange({ ...meta, action: "settings.updated", entityType: "SystemSetting", entityId: "leave", before, after });
   return after;
 }
 

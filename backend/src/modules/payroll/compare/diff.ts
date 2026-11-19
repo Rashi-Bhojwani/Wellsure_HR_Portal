@@ -9,8 +9,10 @@ const PERCENT_PLACES = 2; // allow-number: a count of decimal places for display
 
 export const normalise = (label: string): string => label.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
-export function parseOptions(raw: { toleranceAmount?: string; tolerancePercent?: string; aliases?: Record<string, string> }): CompareOptions {
-  const amount = (raw.toleranceAmount ?? "1").trim() || "1";
+/** Audit A-20 (2026-11-18): a blank amount tolerance is the parallel run's own setting (Default behaviours, "what counts as a match"; default 0), passed in by
+ *  the caller, never a separate hidden ₹1. A blank percentage is 0. */
+export function parseOptions(raw: { toleranceAmount?: string; tolerancePercent?: string; aliases?: Record<string, string> }, defaultAmount = "0"): CompareOptions {
+  const amount = (raw.toleranceAmount ?? defaultAmount).trim() || defaultAmount;
   const percent = (raw.tolerancePercent ?? "0").trim() || "0";
   if (!/^\d+(\.\d+)?$/.test(amount) || !/^\d+(\.\d+)?$/.test(percent)) throw new HttpError(400, "A tolerance is a plain number, for example 1 rupee or 0.5 percent.", "VALIDATION_ERROR");
   return { toleranceAmount: canonicalDecimal(dec(amount)), tolerancePercent: canonicalDecimal(dec(percent)), aliases: raw.aliases ?? {} };

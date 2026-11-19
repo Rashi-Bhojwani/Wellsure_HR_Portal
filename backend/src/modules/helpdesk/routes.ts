@@ -12,7 +12,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import * as controller from "./controller";
-import { MAX_ATTACHMENTS_PER_MESSAGE } from "./service";
+import { MAX_ATTACHMENTS_PER_MESSAGE, helpdeskLimits } from "./service";
 import {
   addMessageSchema,
   createCategorySchema,
@@ -36,6 +36,7 @@ const manage = requirePermission("helpdesk.manage");
 const upload = memoryUploadMany(MAX_DOCUMENT_UPLOAD_MB_CEILING, MAX_ATTACHMENTS_PER_MESSAGE);
 
 helpdeskRouter.get("/categories", controller.listActiveCategories);
+helpdeskRouter.get("/limits", async (_req, res) => void res.json(await helpdeskLimits())); // audit A-18
 helpdeskRouter.get("/categories/all", manage, controller.listAllCategories);
 helpdeskRouter.post("/categories", manage, validate({ body: createCategorySchema }), controller.createCategory);
 helpdeskRouter.patch("/categories/:id", manage, validate({ params: idParamsSchema, body: updateCategorySchema }), controller.updateCategory);

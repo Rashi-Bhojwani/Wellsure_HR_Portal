@@ -22,7 +22,8 @@ export async function gatherTax(ctx: RuleContext, cycle: { start: Date; end: Dat
   ctx.rule("TDS_MODE");
   const fy = financialYearOf(iso(cycle.end)).label;
   const year = await taxYearForEngine(fy);
-  if (year) ctx.addLivePin({ kind: "TAX_YEAR", key: fy, version: year.version, valueHash: year.valueHash });
+  if (year?.pack) ctx.addPackPin(`TAX_YEAR:${fy}`, year.valueHash); // the standard year: in force, stale once a director confirms their own
+  else if (year) ctx.addLivePin({ kind: "TAX_YEAR", key: fy, version: year.version, valueHash: year.valueHash });
   const values = year?.value ?? null;
   const missing = missingForTds(values);
   // A-3: real income tax waits until the year's opening figures are confirmed by a different director (an empty year is confirmed too, on purpose).

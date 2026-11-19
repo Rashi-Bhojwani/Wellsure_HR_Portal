@@ -15,7 +15,7 @@ import { employeeIdOfUser } from "../salary/guards";
 import { reverifyRun } from "./closing";
 import { computeRun, enqueueCalculation } from "./engine";
 import { gatherRunInputs } from "./gather";
-import { RulesMissingError, loadRunRules, type MissingRule } from "./rules";
+import { RulesMissingError, loadRunRules, notSetFromPins, type MissingRule } from "./rules";
 import { iso } from "./days";
 import { checkForRun } from "../inputs/service";
 import { skippedForCycle } from "../exclusions/service";
@@ -40,7 +40,7 @@ const m = (v: Prisma.Decimal | string) => canonicalDecimal(dec(v.toString()));
 export async function readiness(cycleStart: string) {
   const cycle = await cycleOf(cycleStart);
   const today = businessToday();
-  const ctx = await RuleContext.load();
+  const ctx = await RuleContext.load({ asOf: cycle.end });
   const inputs = await gatherRunInputs(cycle, ctx);
   let missing: MissingRule[] = [];
   try {
@@ -180,15 +180,16 @@ export async function previewCalculation(runId: string) {
     totals: { gross: canonicalDecimal(t.gross), deductions: canonicalDecimal(t.deductions), net: canonicalDecimal(t.net), payable: t.payable, held: t.held, excluded: t.excluded, exceptions: t.exceptions },
     before: run.runHash ? { gross: m(run.totalGross), deductions: m(run.totalDeductions), net: m(run.totalNet) } : null,
     watermark,
-    runNotices: runNotices(computed.rules.ptSlabs === null, computed.rules.lwfTable === null),
+    runNotices: runNotices((computed.rules.notSet ?? []).includes("PT"), (computed.rules.notSet ?? []).includes("LWF")),
     willVoidApproval: false,
   };
 }
 
 export function runNotices(ptNotSet: boolean, lwfNotSet: boolean): string[] {
   const out = ["Income tax (TDS), loan recoveries and reimbursements are not calculated until Phase 7. Their lines are absent, not zero."];
-  if (ptNotSet) out.push("Professional tax tables are not set up, so none is charged. Until they are set and confirmed this run is a test.");
-  if (lwfNotSet) out.push("Labour welfare fund tables are not set up, so none is charged. Until they are set and confirmed this run is a test.");
+  // Owner decision 2026-11-17: "not set" is said plainly so nobody reads it as "not levied". It does not block the month.
+  if (ptNotSet) out.push("Professional Tax: not set. No professional tax is deducted until a director chooses the state (Default behaviours) and enters its table (Rules and setup). This is not the same as \"not levied\".");
+  if (lwfNotSet) out.push("Labour Welfare Fund: not set. No LWF is deducted until a director chooses the state (Default behaviours) and enters its table (Rules and setup). This is not the same as \"not levied\".");
   return out;
 }
 
@@ -251,9 +252,9 @@ export async function getRun(runId: string) {
     createdBy: makers.get(run.createdByUserId) ?? "Someone",
     calculatedBy: run.calculatedByUserId ? (makers.get(run.calculatedByUserId) ?? "Someone") : null,
     watermark,
-    rules: statuses.map((s) => ({ key: s.pin.key, kind: s.pin.kind ?? "RULE", version: s.pin.version, label: s.label, status: s.status, stale: s.stale, notSet: s.pin.unset === true, frozen: s.pin.live === false })),
+    rules: statuses.map((s) => ({ key: s.pin.key, kind: s.pin.kind ?? "RULE", version: s.pin.version, label: s.label, status: s.status, stale: s.stale, notSet: s.pin.unset === true || s.pin.kind === "NOT_SET", frozen: s.pin.live === false })),
     stale: statuses.some((s) => s.stale),
-    notices: runNotices(statuses.some((s) => s.pin.key === "PT_SLABS" && s.pin.unset), statuses.some((s) => s.pin.key === "LWF_TABLE" && s.pin.unset)),
+    notices: runNotices(notSetFromPins(statuses.map((s) => s.pin), "PT_SLABS"), notSetFromPins(statuses.map((s) => s.pin), "LWF_TABLE")),
     skipped: await skippedForCycle(run.cycleStart, run.cycleEnd),
     events: events.map((e) => ({ type: e.type, at: e.createdAt.toISOString() })),
   };

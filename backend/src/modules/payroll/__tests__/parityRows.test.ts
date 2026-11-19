@@ -17,6 +17,7 @@ import { dec } from "../money";
 import { REAL_RULES, approve, closeWorld, closingWorld, confirmAllPins, driveToFinal, requestStep, staffWith, type Closing } from "./closeTestHelpers";
 import { CYCLE, calculateRun, setRules } from "./runTestHelpers";
 import { makeComponent } from "./salaryTestHelpers";
+import { setBehaviourByRoute, testEncashment, testGratuity, testNotice } from "./settlementRulesTestHelpers";
 
 // Session A parity rows (docs/plans/A_PARITY_ROWS.md): the Form 16 PDF (ST-24 / SS-05), the quarterly export (ST-21), the settlement guide (PY-27/28/29), PF and ESI
 // challans (ST-03 / ST-06), the bank summary PDF (PY-37) and the reimbursement statement (PY-24), over one real finalised run. Made-up people, figures and numbers only.
@@ -132,6 +133,7 @@ describe("Session A parity rows over a finalised run", () => {
   let batchId = "";
   let claimId = "";
   let separationId = "";
+  const ruleIds: string[] = [];
   const challanIds: string[] = [];
   const people: Record<string, { employeeId: string; userId: string; employeeCode: string }> = {};
   const tok: Record<string, string> = {};
@@ -188,6 +190,7 @@ describe("Session A parity rows over a finalised run", () => {
   afterAll(async () => {
     setBusinessTodayForTests(null);
     await deleteWithDependents("StatutoryChallan", challanIds);
+    await deleteWithDependents("BehaviourProposal", ruleIds);
     for (const p of Object.values(people)) await cleanupFullTestEmployee(p.employeeId);
     await closeWorld(world);
   }, 300_000);
@@ -252,7 +255,12 @@ describe("Session A parity rows over a finalised run", () => {
     expect((await call(world.tokens.maker, "get", `/api/tax/quarterly/export?fy=${FY}&quarter=5&format=csv`)).status).toBe(400);
   });
 
-  it("PY-27/28/29: the settlement guide shows the facts from their sources and every rule Not set; it proposes no amount", async () => {
+  it("PY-27/28/29: the settlement guide is refused while its rules are Not set; once set it shows the facts from their sources and each rule in force; it proposes no amount", async () => {
+    // Changed 2026-11-17 (owner decision, CHANGED_TESTS.md): the three rules ship Not set and the guide is refused until they are set (before, it showed each as "Not set").
+    const refused = await call(world.tokens.maker, "get", `/api/settlements/guide?separationId=${separationId}`);
+    expect([refused.status, refused.body.error.code]).toEqual([409, "SETTING_NOT_SET"]);
+    expect(refused.body.error.message).toBe("Gratuity salary head is not set. Choose it in settings. Notice pay salary head is not set. Choose it in settings. Leave encashment salary head is not set. Choose it in settings.");
+    for (const [key, value] of [["payroll.gratuity", testGratuity(world.basic)], ["payroll.noticeRecovery", testNotice(world.basic, { recoverShortfall: false })], ["payroll.leaveEncashment", testEncashment(world.basic, { exitLeaveTypes: [] })]] as const) ruleIds.push(await setBehaviourByRoute(world.tokens.maker, world.tokens.checkerA, key, value));
     const g = await call(world.tokens.maker, "get", `/api/settlements/guide?separationId=${separationId}`);
     expect(g.status, JSON.stringify(g.body)).toBe(200);
     const emp = await prisma.employee.findUniqueOrThrow({ where: { id: who("c") } });
@@ -264,7 +272,8 @@ describe("Session A parity rows over a finalised run", () => {
     const earnings = await prisma.payrollRunLine.findMany({ where: { runItemId: item.id, kind: "EARNING" } });
     expect(g.body.lastDrawn.earnings.map((e: { amount: string }) => paise(e.amount)).reduce((s: bigint, x: bigint) => s + x, 0n)).toBe(earnings.reduce((s, l) => s + paise(Number(l.amount.toString()).toFixed(2)), 0n));
     expect(g.body.rules.map((r: { key: string }) => r.key)).toEqual(["gratuity", "noticePeriod", "encashmentRate"]);
-    for (const r of g.body.rules) expect(r).toMatchObject({ value: null, state: "Not set" });
+    expect(g.body.rules.map((r: { state: string }) => r.state)).toEqual(["Set", "Set", "Set"]);
+    expect(g.body.rules.map((r: { value: string }) => r.value)).toEqual([expect.stringContaining(`(${world.basic}) x 15 / 26`), "From 2026-01-01: 30 days; a shortfall is not recovered", `(${world.basic}) / 30 a day; at exit: no type`]);
     expect(Object.keys(g.body).sort()).toEqual(["dateOfJoining", "employeeCode", "lastDrawn", "lastWorkingDate", "leave", "note", "rules", "separationId", "service"]); // no amount field of its own
     for (const r of g.body.rules) expect(Object.keys(r).sort()).toEqual(["key", "label", "state", "value", "why"]);
     expect((await call(world.tokens.maker, "get", "/api/settlements/guide?separationId=nope")).status).toBe(404);

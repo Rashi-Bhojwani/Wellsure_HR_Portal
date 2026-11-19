@@ -8,7 +8,7 @@ import { logger } from "../../../lib/logger";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, createEmployeeTestOrgMasters, createFullTestEmployee, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { runMonthlyPlAccrual } from "../../leave/accrual";
-import { setEncashmentRateProvider, SettingsBasedEncashmentRateProvider } from "../../leave/encashmentRate";
+import { NotConfiguredEncashmentRateProvider, setEncashmentRateProvider } from "../../leave/encashmentRate";
 import { writeLedgerEntry } from "../../leave/ledger";
 import * as yearEndService from "../../leave/yearEnd";
 import { clearPeepsSettings, setSetting } from "../../peeps/__tests__/peepsTestKit";
@@ -83,7 +83,7 @@ describe("new leave types", () => {
   });
 
   afterAll(async () => {
-    setEncashmentRateProvider(new SettingsBasedEncashmentRateProvider());
+    setEncashmentRateProvider(new NotConfiguredEncashmentRateProvider()); // the default since the payroll branch removed the settings-based provider
     const docs = await prisma.leaveRequestDocument.findMany({ where: { leaveRequestId: { in: requestIds } }, select: { id: true } });
     const versions = await prisma.leaveRuleVersion.findMany({ where: { leaveTypeId: { in: ["MENSTRUAL", "MEDICAL", "WEDDING", "BEREAVEMENT"].map((c) => typeId[c]!) } }, select: { id: true } });
     await purgeAppendOnly("AuditLog", { entityId: { in: [...docs.map((d) => d.id), ...versions.map((v) => v.id), ...requestIds, ...Object.values(typeId)] } });

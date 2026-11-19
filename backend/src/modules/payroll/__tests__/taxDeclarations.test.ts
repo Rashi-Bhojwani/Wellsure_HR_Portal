@@ -95,7 +95,8 @@ describe("tax years, declarations, proofs and TDS in a run", () => {
   });
 
   it("a tax year is Not set until a director enters it, saved as a Placeholder and confirmed by a different director; each value needs its source note", async () => {
-    expect((await t(maker(), "get", "/years")).body.years).toEqual([]);
+    // Changed 2026-11-16 (standard defaults pack, CHANGED_TESTS.md): the standard 2026-27 year is listed (used while no director has entered the year); nothing else.
+    expect((await t(maker(), "get", "/years")).body.years.map((y: { year: string; status: string; standard: { inUse: boolean } | null }) => [y.year, y.status, y.standard?.inUse])).toEqual([[FY, "NOT_SET", true]]);
     const bad = await t(maker(), "post", `/years/${FY}/save-preview`, { value: { cessPercent: { value: "4", effectiveFrom: "2026-04-01" } } });
     expect([bad.status, bad.body.error.code]).toEqual([400, "VALIDATION_ERROR"]);
     expect((await t(maker(), "post", `/years/2026-28/save-preview`, { value: {} })).status).toBe(400); // not a financial year

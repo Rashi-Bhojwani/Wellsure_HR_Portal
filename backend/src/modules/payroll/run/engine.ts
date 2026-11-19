@@ -75,7 +75,7 @@ export function totalsOf(items: readonly ItemOut[]): RunTotals {
 
 /** Works out the whole run in memory: gathers through the readers, reads the rules (pinning them), calculates each person. Writes nothing. */
 export async function computeRun(cycle: { start: Date; end: Date; label: string; runId?: string }): Promise<Computed> {
-  const ctx = await RuleContext.load();
+  const ctx = await RuleContext.load({ asOf: cycle.end }); // a dated standard default in force on the month's last day applies to the whole month
   const inputs = await gatherRunInputs({ ...cycle, company: cycle.runId ? await companyKeyOfRun(cycle.runId) : "MAIN" }, ctx); // part 3 B2: a run is for one company
   // A month with a pay head that takes its value from Monthly Inputs is calculated only when every figure is entered and a director has confirmed them.
   await assertReadyForRun(iso(cycle.start), inputs.people.map((p) => p.employeeId), cycle.label);

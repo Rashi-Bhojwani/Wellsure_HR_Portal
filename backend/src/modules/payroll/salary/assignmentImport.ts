@@ -5,6 +5,7 @@ import { writeAuditLog } from "../../../lib/audit";
 import { requireDirector } from "../../../lib/directorAuthority";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
+import { scheduleLimitValue } from "../../../lib/schedulesAndLimits";
 import { normaliseHeader, parseDateText, readTable } from "../inputs/importParse";
 import { canonicalDecimal, dec } from "../money";
 import { createRevision, previewRevision } from "./revisions";
@@ -16,7 +17,6 @@ import { loadStructureVersion } from "./structures";
 
 type Actor = { userId: string; ip?: string | null };
 export const TEMPLATE_COLUMNS = ["Employee Number", "Structure", "Structure Version", "Annual CTC", "Effective From"] as const;
-const MAX_ROWS = 500; // allow-number: rows in one file (a revision covers at most 1000 people)
 const MONEY = /^\d+(\.\d{1,2})?$/;
 
 export function templateCsv(): string {
@@ -52,7 +52,8 @@ async function analyse(file: { buffer: Buffer; originalname: string }, actor: Ac
   const missing = TEMPLATE_COLUMNS.filter((_, i) => cols[i] === -1);
   if (missing.length) throw new HttpError(400, `The file has no column called ${missing.map((c) => `"${c}"`).join(", ")}. Download the template.`, "INVALID_FILE");
   if (table.rows.length === 0) throw new HttpError(400, "The file has no rows.", "INVALID_FILE");
-  if (table.rows.length > MAX_ROWS) throw new HttpError(400, `At most ${MAX_ROWS} rows in one file.`, "INVALID_FILE");
+  const maxRows = await scheduleLimitValue<number>("payroll.salaryAssignmentImportMaxRows"); // audit A-19: a setting, default 500
+  if (table.rows.length > maxRows) throw new HttpError(400, `At most ${maxRows} rows in one file (System Settings, Schedules and limits).`, "INVALID_FILE");
   const cells = table.rows.map((r) => ({ line: r.line, v: cols.map((c) => (r.cells[c] ?? "").trim()) as [string, string, string, string, string] }));
   const emps = new Map((await prisma.employee.findMany({ where: { employeeCode: { in: [...new Set(cells.map((c) => c.v[0]))] } }, select: { id: true, employeeCode: true, status: true } })).map((e) => [e.employeeCode, e]));
   const structureOk = new Map<string, string | null>();

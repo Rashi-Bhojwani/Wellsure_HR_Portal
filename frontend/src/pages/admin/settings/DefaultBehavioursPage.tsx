@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { COMPANY_STATES, stateLabel } from "@shared/constants/statutoryDefaults";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Form, Input, InputNumber, Select } from "antd";
+import { Button, Form, Input, InputNumber, Select, Typography } from "antd";
 import * as api from "../../../api/behaviours";
 import * as loansApi from "../../../api/loans";
 import * as lettersApi from "../../../api/letters";
 import * as payrollApi from "../../../api/payroll";
+import * as leaveApi from "../../../api/leave";
 import type { Behaviour, BehaviourKey } from "../../../api/behaviours";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { PageHeader, Panel, QueryState, SideDrawer, StatusChip, toast } from "../../../ui";
@@ -15,8 +18,17 @@ import { space } from "../../../theme/tokens";
 const RULE_LABEL: Record<string, string> = { STOP_RUN: "Stop the run", SKIP_AND_CARRY: "Skip the instalment and carry it forward", PARTIAL_AND_CARRY: "Recover what is possible, carry the rest" };
 const MODE_LABEL: Record<string, string> = { NONE: "None", FULL_MONTH: "A full month", PRO_RATA_DAYS_WORKED: "Pro-rata by days worked", FULL_IF_MIN_DAYS: "A full month only if at least N days were worked" };
 
-function describe(b: Pick<Behaviour, "key" | "value">): string {
+function describe(b: Pick<Behaviour, "key" | "value">, leaveTypeNames: ReadonlyMap<string, string> = new Map()): string {
+  const leaveTypeName = (id: string) => leaveTypeNames.get(id) ?? "A leave type";
   const v = b.value as Record<string, unknown> | boolean | null;
+  // Owner decision 2026-11-17 (docs/plans/OWNER_EMPTY_SETTINGS.md): the state ships Not set; no state's PT, LWF or minimum wages are loaded.
+  if (b.key === "statutory.state") return typeof b.value === "string" ? `${stateLabel(b.value)}. Its PT and LWF tables are entered under Rules and setup, its minimum wages on Minimum Wages.` : "Not set: no professional tax or LWF is deducted, and the run and payslip say \"not set\" (not \"not levied\")";
+  if (b.key === "leave.earnedLeaveType" || b.key === "leave.compOffType") return typeof b.value === "string" ? `${leaveTypeName(b.value)}` : b.key === "leave.earnedLeaveType" ? "Not set: the monthly accrual and the year-end run are refused until it is chosen" : "Not set: comp-off cannot be granted until it is chosen";
+  if (b.key === "statutory.reviewIntervalMonths") return `Every ${String(b.value)} month(s)`;
+  // Final merge 2026-11-19 (audit #13): sign-in lifetimes.
+  if (b.key === "auth.passwordResetLinkMinutes") return `A Forgot-password link works for ${String(b.value)} minutes, once`;
+  if (b.key === "auth.staySignedInDays") return `A person stays signed in for ${String(b.value)} day(s) on a device, renewed each time it is used`;
+  if (b.key === "payroll.ctcIncludesEmployerStatutory") return v === true ? "On: CTC = gross + employer PF + employer ESI" : "Off: CTC is gross pay only";
   if (b.key === "access.developerSeesSwipes") return v === true ? "On: the Developer role sees Employee Swipes" : "Off: the Developer role does not see Employee Swipes";
   if (b.key === "letters.employeeMayAsk") return Array.isArray(v) && v.length ? `Employees may ask for: ${v.join(", ")}` : "None: employees cannot ask for a letter";
   if (b.key === "identity.directorConfirmsHrChanges") return v === true ? "On: a director confirms HR's bank and statutory changes before they take effect" : "Off: HR's bank and statutory changes take effect at once";
@@ -29,18 +41,18 @@ function describe(b: Pick<Behaviour, "key" | "value">): string {
     return `${o.rate.mode === "FLAT_PER_HOUR" ? `₹${o.rate.perHour} an hour` : `${o.rate.multiplier} × (${(o.rate.basisHeads ?? []).join(" + ")}) ÷ ${o.rate.hoursPerMonth} hours`}, paid as ${o.payHead}; ${ROUND_LABEL[o.rounding.mode] ?? o.rounding.mode} to ${o.rounding.scale} place(s)`;
   }
   if (b.key === "payroll.leaveEncashment") {
-    if (!v || typeof v !== "object") return "Not set: encashment requests are not paid; a settlement shows leave in days only";
+    if (!v || typeof v !== "object") return "Not set: encashment requests are not paid and a final settlement is refused until this is set";
     const e = v as { payHead: string; exitLeaveTypes: string[]; basisHeads: string[]; divisor: { kind: string; days?: string }; rounding: { mode: string; scale: number } };
     return `Days × (${e.basisHeads.join(" + ")}) ÷ ${e.divisor.kind === "FIXED_DAYS" ? e.divisor.days : "the month's calendar days"}, paid as ${e.payHead}; at exit: ${e.exitLeaveTypes.join(", ") || "no type"}; ${ROUND_LABEL[e.rounding.mode] ?? e.rounding.mode} to ${e.rounding.scale} place(s)`;
   }
   // Part 4: settlement mechanisms (effective-dated), Not set until two directors confirm them.
   if (b.key === "payroll.gratuity") {
-    if (!v || typeof v !== "object") return "Not set: a settlement shows no gratuity line";
+    if (!v || typeof v !== "object") return "Not set: a final settlement is refused until this is set";
     const g = v as { effectiveFrom: string; minYears: string; partYear: string; wageHeads: string[]; daysPerYear: string; divisor: string; ceiling: string };
     return `From ${g.effectiveFrom}: after ${g.minYears} year(s), (${g.wageHeads.join(" + ")}) × ${g.daysPerYear} ÷ ${g.divisor} a year${g.partYear === "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR" ? " (six months or more counts as a year)" : ""}; ceiling ${g.ceiling === "NONE" ? "none" : `₹${g.ceiling}`}`;
   }
   if (b.key === "payroll.noticeRecovery") {
-    if (!v || typeof v !== "object") return "Not set: no notice recovery is worked out";
+    if (!v || typeof v !== "object") return "Not set: a final settlement is refused until this is set";
     const n = v as { effectiveFrom: string; noticeDays: number; recoverShortfall: boolean; basisHeads: string[]; divisor: string };
     return `From ${n.effectiveFrom}: ${n.noticeDays} days' notice; ${n.recoverShortfall ? `a shortfall is recovered at (${n.basisHeads.join(" + ")}) ÷ ${n.divisor} a day` : "a shortfall is not recovered"}`;
   }
@@ -59,9 +71,19 @@ function describe(b: Pick<Behaviour, "key" | "value">): string {
   return named.length ? `${named.join("; ")}. Every other loan type: skip and carry forward.` : "Every loan type: skip the instalment and carry it forward, with a warning naming the loan.";
 }
 
+// Owner decision 2026-11-17: the settings the owners decide themselves are grouped first, each with an anchor (#key) Ready for First Run links to.
+const GROUPS: Array<{ id: string; title: string; intro: string; keys: string[] }> = [
+  { id: "final-settlement", title: "Final settlement rules", intro: "Gratuity, notice pay and leave encashment. Not set until you choose them; a final settlement is refused until all three are set. Head choices list only the salary heads that exist in your company.", keys: ["payroll.gratuity", "payroll.noticeRecovery", "payroll.leaveEncashment"] },
+  { id: "leave-roles", title: "Leave type roles", intro: "Which leave type is the earned / paid leave (monthly accrual and year end) and which is comp-off. Leave type names and codes are free; until a role is chosen, the run that needs it is refused.", keys: ["leave.earnedLeaveType", "leave.compOffType"] },
+  { id: "sign-in", title: "Sign-in lifetimes", intro: "How long a Forgot-password link works and how long a person stays signed in. The conventional values are in use until you change them; the session cookie always ends with the session.", keys: ["auth.passwordResetLinkMinutes", "auth.staySignedInDays"] },
+  { id: "state", title: "Professional tax, LWF and minimum wages", intro: "Not set until you choose the state. No state's values are loaded: after choosing it, enter its PT and LWF tables (Rules and setup) and its minimum wages (Payroll, Minimum Wages).", keys: ["statutory.state"] },
+];
+const GROUPED = new Set(GROUPS.flatMap((g) => g.keys));
+const STATE_OPTIONS = Object.entries(COMPANY_STATES).map(([value, label]) => ({ value, label }));
+
 const ROUND_LABEL: Record<string, string> = { HALF_UP: "Half up", HALF_EVEN: "Half even", UP: "Up", DOWN: "Down", CEIL: "Ceiling", FLOOR: "Floor" };
 
-type FormValues = { reason: string; allowance?: string; retentionDays?: number; effectiveFrom?: string; minYears?: string; partYear?: string; daysPerYear?: string; divisor?: string; ceiling?: string; noticeDays?: number; recoverShortfall?: string; payHead?: string; rateMode?: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string; exitLeaveTypes?: string[]; divisorKind?: string; divisorDays?: string; codes?: string[]; roundMode?: string; scale?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
+type FormValues = { reason: string; stateKey?: string; leaveTypeId?: string; months?: number; allowance?: string; retentionDays?: number; effectiveFrom?: string; minYears?: string; partYear?: string; daysPerYear?: string; divisor?: string; ceiling?: string; noticeDays?: number; recoverShortfall?: string; payHead?: string; rateMode?: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string; exitLeaveTypes?: string[]; divisorKind?: string; divisorDays?: string; codes?: string[]; roundMode?: string; scale?: number; minutes?: number; days?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
 
 export function DefaultBehavioursPage() {
   const queryClient = useQueryClient();
@@ -71,6 +93,8 @@ export function DefaultBehavioursPage() {
   const types = useQuery({ queryKey: ["loans", "types"], queryFn: loansApi.loanTypes });
   const letterTemplates = useQuery({ queryKey: ["letters", "templates"], queryFn: lettersApi.listTemplates });
   const comps = useQuery({ queryKey: ["payroll", "components"], queryFn: payrollApi.listComponents });
+  const leaveTypes = useQuery({ queryKey: ["leave", "types", "all"], queryFn: leaveApi.listAllLeaveTypes });
+  const typeNames = new Map((leaveTypes.data ?? []).map((t) => [t.id, `${t.name} (${t.code})`]));
   const earningHeads = (comps.data ?? []).filter((c) => c.value?.type === "EARNING").map((c) => ({ value: c.code, label: c.value?.payslipLabel ? `${c.value.payslipLabel} (${c.code})` : c.code }));
   const PAY_ROUND = [{ value: "HALF_UP", label: "Half up" }, { value: "UP", label: "Up" }, { value: "DOWN", label: "Down" }];
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["behaviours"] });
@@ -88,6 +112,12 @@ export function DefaultBehavioursPage() {
         : key === "payroll.parallelRetentionDays" ? v.retentionDays
         : key === "payroll.gratuity" ? { effectiveFrom: v.effectiveFrom, minYears: v.minYears, partYear: v.partYear, wageHeads: v.basisHeads ?? [], daysPerYear: v.daysPerYear, divisor: v.divisor, ceiling: v.ceiling?.trim() ? v.ceiling.trim() : "NONE", rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
         : key === "payroll.noticeRecovery" ? { effectiveFrom: v.effectiveFrom, noticeDays: v.noticeDays, recoverShortfall: v.recoverShortfall === "yes", basisHeads: v.basisHeads ?? [], divisor: v.divisor, rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
+        : key === "statutory.state" ? v.stateKey
+        : key === "leave.earnedLeaveType" || key === "leave.compOffType" ? v.leaveTypeId
+        : key === "statutory.reviewIntervalMonths" ? v.months
+        : key === "auth.passwordResetLinkMinutes" ? v.minutes
+        : key === "auth.staySignedInDays" ? v.days
+        : key === "payroll.ctcIncludesEmployerStatutory" ? v.on === "on"
         : key === "payroll.leaveEncashment" ? { payHead: v.payHead, exitLeaveTypes: v.exitLeaveTypes ?? [], basisHeads: v.basisHeads ?? [], divisor: v.divisorKind === "CALENDAR_DAYS" ? { kind: "CALENDAR_DAYS" } : { kind: "FIXED_DAYS", days: v.divisorDays }, rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
         : Object.fromEntries((v.rules ?? []).filter((r) => r?.typeKey && r?.rule).map((r) => [r.typeKey, r.rule]));
       return api.proposeBehaviour(key, value, v.reason);
@@ -100,33 +130,60 @@ export function DefaultBehavioursPage() {
     setEditing(b);
     form.resetFields();
     const v = b.value as Record<string, unknown> | boolean | null;
-    if (b.key === "access.developerSeesSwipes" || b.key === "identity.directorConfirmsHrChanges") form.setFieldsValue({ on: v === true ? "on" : "off" });
+    if (b.key === "access.developerSeesSwipes" || b.key === "identity.directorConfirmsHrChanges" || b.key === "payroll.ctcIncludesEmployerStatutory") form.setFieldsValue({ on: v === true ? "on" : "off" });
+    if (b.key === "statutory.state" && typeof b.value === "string") form.setFieldsValue({ stateKey: b.value });
+    if ((b.key === "leave.earnedLeaveType" || b.key === "leave.compOffType") && typeof b.value === "string") form.setFieldsValue({ leaveTypeId: b.value });
+    if (b.key === "statutory.reviewIntervalMonths" && typeof b.value === "number") form.setFieldsValue({ months: b.value });
+    if (b.key === "auth.passwordResetLinkMinutes" && typeof b.value === "number") form.setFieldsValue({ minutes: b.value });
+    if (b.key === "auth.staySignedInDays" && typeof b.value === "number") form.setFieldsValue({ days: b.value });
     if (b.key === "payroll.parallelTolerance") form.setFieldsValue({ allowance: (v as { allowance?: string } | null)?.allowance ?? "0" });
     if (b.key === "letters.employeeMayAsk") form.setFieldsValue({ codes: Array.isArray(v) ? (v as string[]) : [] });
     if (b.key === "leave.leavingMonthAccrual") form.setFieldsValue({ mode: (v as { mode: string }).mode, minDays: (v as { minDays?: number }).minDays });
     if (b.key === "loan.shortfall") form.setFieldsValue({ rules: Object.entries((v ?? {}) as Record<string, string>).map(([typeKey, rule]) => ({ typeKey, rule })) });
   };
   const mode = Form.useWatch("mode", form);
+  // Ready for First Run links here with #<key>: bring that setting into view and give it focus once the list has loaded.
+  const location = useLocation();
+  useEffect(() => {
+    if (!q.data || !location.hash) return;
+    const el = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (el) { el.scrollIntoView({ block: "start" }); el.focus({ preventScroll: true }); }
+  }, [q.data, location.hash]);
+  const card = (b: Behaviour) => (
+    <div key={b.key} id={b.key} tabIndex={-1} style={{ scrollMarginTop: space[16] }}>
+      <Panel title={b.title} subtitle={b.what} extra={<StatusChip tone={b.state === "CONFIRMED" ? "success" : b.state === "DEFAULT" ? "info" : "warning"}>{b.label ?? "Changed and confirmed"}</StatusChip>}>
+        <p style={{ marginTop: 0 }}>In effect: {describe(b, typeNames)}</p>
+        {b.confirmed && <p>Proposed by {b.confirmed.proposedBy}, confirmed by {b.confirmed.confirmedBy}. Reason: {b.confirmed.reason}</p>}
+        {b.pending.slice(0, 1).map((p) => (
+          <div key={p.id} style={{ display: "flex", gap: space[2], flexWrap: "wrap", alignItems: "center", marginBottom: space[2] }}>
+            <StatusChip tone="warning">Waiting for a different director</StatusChip>
+            <span>{describe({ key: b.key, value: p.value }, typeNames)} — proposed by {p.proposedBy}: {p.reason}</span>
+            {!p.mine && <Button type="primary" loading={confirm.isPending} onClick={() => confirm.mutate(p.id)}>Confirm</Button>}
+          </div>
+        ))}
+        <Button onClick={() => open(b)}>{b.state === "NOT_SET" ? "Set it" : "Propose a change"}</Button>
+      </Panel>
+    </div>
+  );
   return (
     <>
       <PageHeader title="Default behaviours" subtitle="Some behaviours start from a common default; the rest start Not set. A change is proposed by one director and confirmed by a different one." />
       <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
         {(
           <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
-            {(q.data ?? []).map((b) => (
-              <Panel key={b.key} title={b.title} subtitle={b.what} extra={<StatusChip tone={b.state === "CONFIRMED" ? "success" : b.state === "DEFAULT" ? "info" : "warning"}>{b.label ?? "Changed and confirmed"}</StatusChip>}>
-                <p style={{ marginTop: 0 }}>In effect: {describe(b)}</p>
-                {b.confirmed && <p>Proposed by {b.confirmed.proposedBy}, confirmed by {b.confirmed.confirmedBy}. Reason: {b.confirmed.reason}</p>}
-                {b.pending.slice(0, 1).map((p) => (
-                  <div key={p.id} style={{ display: "flex", gap: space[2], flexWrap: "wrap", alignItems: "center", marginBottom: space[2] }}>
-                    <StatusChip tone="warning">Waiting for a different director</StatusChip>
-                    <span>{describe({ key: b.key, value: p.value })} — proposed by {p.proposedBy}: {p.reason}</span>
-                    {!p.mine && <Button type="primary" loading={confirm.isPending} onClick={() => confirm.mutate(p.id)}>Confirm</Button>}
-                  </div>
-                ))}
-                <Button onClick={() => open(b)}>Propose a change</Button>
-              </Panel>
+            {GROUPS.map((g) => (
+              <section key={g.id} id={g.id} tabIndex={-1} aria-labelledby={`${g.id}-title`} style={{ display: "flex", flexDirection: "column", gap: space[3], scrollMarginTop: space[16] }}>
+                <div>
+                  <Typography.Title level={4} id={`${g.id}-title`} style={{ margin: 0 }}>{g.title}</Typography.Title>
+                  <Typography.Text type="secondary">{g.intro}</Typography.Text>
+                </div>
+                {(q.data ?? []).filter((b) => g.keys.includes(b.key)).map(card)}
+              </section>
             ))}
+            <section aria-labelledby="other-title" style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+              <Typography.Title level={4} id="other-title" style={{ margin: 0 }}>Other behaviours</Typography.Title>
+              {(q.data ?? []).filter((b) => !GROUPED.has(b.key)).map(card)}
+            </section>
           </div>
         )}
       </QueryState>
@@ -146,6 +203,36 @@ export function DefaultBehavioursPage() {
             <Form.Item name="on" label="A director confirms HR's bank and statutory changes before they take effect" rules={[{ required: true }]}>
               <Select options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} />
             </Form.Item>
+          )}
+          {editing?.key === "statutory.state" && (
+            <Form.Item name="stateKey" label="State" rules={[{ required: true, message: "Choose the state" }]}>
+              <Select showSearch optionFilterProp="label" placeholder="Choose a state" options={STATE_OPTIONS} />
+            </Form.Item>
+          )}
+          {(editing?.key === "leave.earnedLeaveType" || editing?.key === "leave.compOffType") && (
+            <Form.Item name="leaveTypeId" label="Leave type" rules={[{ required: true, message: "Choose the leave type" }]}>
+              <Select showSearch optionFilterProp="label" placeholder="Choose a leave type" options={(leaveTypes.data ?? []).filter((t) => t.isActive).map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))} />
+            </Form.Item>
+          )}
+          {editing?.key === "auth.passwordResetLinkMinutes" && (
+            <Form.Item name="minutes" label="A Forgot-password link works for (minutes, 5 to 1440)" rules={[{ required: true }]}><InputNumber min={5} max={1440} style={{ width: "100%" }} /></Form.Item>
+          )}
+          {editing?.key === "auth.staySignedInDays" && (
+            <Form.Item name="days" label="Stay signed in for (days, 1 to 90)" rules={[{ required: true }]}><InputNumber min={1} max={90} style={{ width: "100%" }} /></Form.Item>
+          )}
+          {editing?.key === "statutory.reviewIntervalMonths" && (
+            <Form.Item name="months" label="Review the standard values every (months)" rules={[{ required: true }]}><InputNumber min={1} max={24} style={{ width: "100%" }} /></Form.Item>
+          )}
+          {editing?.key === "payroll.ctcIncludesEmployerStatutory" && (
+            <Form.Item name="on" label="CTC includes the employer's PF and ESI" rules={[{ required: true }]}>
+              <Select options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} />
+            </Form.Item>
+          )}
+          {(editing?.key === "payroll.gratuity" || editing?.key === "payroll.noticeRecovery" || editing?.key === "payroll.leaveEncashment") && earningHeads.length === 0 && (
+            <p role="alert">No earning heads exist yet. Add the salary components first (Payroll, Salary Components); only heads that exist can be chosen.</p>
+          )}
+          {editing?.key === "payroll.gratuity" && (
+            <p><Typography.Text type="secondary">For reference only, nothing is filled in: the Code on Social Security, 2020, section 53 provides 15 days' wages (monthly wage ÷ 26 × 15) per completed year, a part year of more than six months counting as a year, at least five years' service, and a ceiling as notified (Rs 20 lakh when checked on 2026-11-16). Choose your own heads and confirm the figures with your adviser.</Typography.Text></p>
           )}
           {editing?.key === "leave.leavingMonthAccrual" && (
             <>

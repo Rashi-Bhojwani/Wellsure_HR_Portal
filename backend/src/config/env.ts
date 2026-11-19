@@ -63,7 +63,6 @@ export const envSchema = z.object({
   JWT_ACCESS_SECRET: devSecret("JWT_ACCESS_SECRET", "change-me-access-secret"),
   JWT_REFRESH_SECRET: devSecret("JWT_REFRESH_SECRET", "change-me-refresh-secret"),
   JWT_ACCESS_TTL: z.string().default("15m"),
-  JWT_REFRESH_TTL: z.string().default("30d"),
 
   // Field-level encryption (src/lib/encryption.ts) and blind-index hashing
   // (src/lib/fieldHash.ts) for bank account/PAN/Aadhaar/UAN — spec §9.

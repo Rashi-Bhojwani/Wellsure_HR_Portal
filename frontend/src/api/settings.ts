@@ -12,6 +12,7 @@ export interface SecuritySettings {
   lockoutMinutes: number;
   passwordMinLength: number;
   invitationTtlHours: number;
+  /** How long a "Forgot password" link stays valid. */
   require2faRoles: string[];
   /** Optional by default: only a director can change it. */
   requireDirectorTwoFactor: boolean;
@@ -20,6 +21,7 @@ export interface SecuritySettings {
     totpVerify: RateLimitSetting;
     inviteAccept: RateLimitSetting;
     forgotPassword: RateLimitSetting;
+    forgotPasswordPerLogin: RateLimitSetting;
     resetPassword: RateLimitSetting;
   };
 }
@@ -34,19 +36,6 @@ export async function updateSecuritySettings(input: Partial<SecuritySettings>): 
   return data;
 }
 
-export interface LeaveSettings {
-  encashmentDefaultDailyRate: number | null;
-}
-
-export async function getLeaveSettings(): Promise<LeaveSettings> {
-  const { data } = await apiClient.get<LeaveSettings>("/api/settings/leave");
-  return data;
-}
-
-export async function updateLeaveSettings(input: Partial<LeaveSettings>): Promise<LeaveSettings> {
-  const { data } = await apiClient.put<LeaveSettings>("/api/settings/leave", input);
-  return data;
-}
 
 // Phase 5 commit C — People & Documents.
 export interface PeopleDocumentsSettings {
@@ -155,3 +144,25 @@ export interface EmailTemplate {
 export const listEmailTemplates = async () => (await apiClient.get<{ templates: EmailTemplate[] }>("/api/settings/email-templates")).data.templates;
 export const updateEmailTemplate = async (key: EmailTemplateKey, text: EmailText | null) =>
   (await apiClient.put<{ templates: EmailTemplate[] }>("/api/settings/email-templates", { key, text })).data.templates;
+
+// Audit fix 2026-11-18 (docs/plans/AUDIT_FIXES.md items 5 and 6): times and limits that had no screen; which settings are still on their built-in default.
+export interface ScheduleLimitSetting {
+  key: string;
+  label: string;
+  help: string;
+  kind: "hour" | "time" | "int";
+  min: number | null;
+  max: number | null;
+  value: number | string;
+  defaultValue: number | string;
+  defaultInUse: boolean;
+}
+export async function getSchedulesLimits(): Promise<ScheduleLimitSetting[]> {
+  return (await apiClient.get<{ settings: ScheduleLimitSetting[] }>("/api/settings/schedules-limits")).data.settings;
+}
+export async function setScheduleLimit(key: string, value: number | string): Promise<ScheduleLimitSetting[]> {
+  return (await apiClient.put<{ settings: ScheduleLimitSetting[] }>(`/api/settings/schedules-limits/${encodeURIComponent(key)}`, { value })).data.settings;
+}
+export async function getDefaultsInUse(): Promise<string[]> {
+  return (await apiClient.get<{ keys: string[] }>("/api/settings/defaults-in-use")).data.keys;
+}

@@ -2,6 +2,7 @@ import { markSeparatedInTx } from "../employee/separations";
 import ExcelJS from "exceljs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { leaveTypeIdFor } from "../leave/leaveTypeRoles";
 import { writeAuditLog } from "../../lib/audit";
 import { businessToday } from "../../lib/businessDate";
 import { dayAfter, inForceOn, writeBankChange } from "../../lib/effectiveDating";
@@ -422,7 +423,8 @@ async function commitBank(tx: Prisma.TransactionClient, rows: { data: Record<str
 async function commitLeaveGrants(tx: Prisma.TransactionClient, rows: { data: Record<string, unknown> }[], meta: ActorMeta): Promise<void> {
   const employees = await tx.employee.findMany({ select: { id: true, employeeCode: true } });
   const empByCode = new Map(employees.map((e) => [e.employeeCode.toLowerCase(), e.id]));
-  const leaveTypes = await tx.leaveType.findMany({ where: { isActive: true, code: { not: "COF" } }, include: { policy: true } });
+  const cof = await leaveTypeIdFor("COMP_OFF");
+  const leaveTypes = await tx.leaveType.findMany({ where: { isActive: true, ...(cof ? { id: { not: cof } } : {}) }, include: { policy: true } });
   const typeByCode = new Map(leaveTypes.map((t) => [t.code.toLowerCase(), t]));
 
   for (const { data } of rows) {

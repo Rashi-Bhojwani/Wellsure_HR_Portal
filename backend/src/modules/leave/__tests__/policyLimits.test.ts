@@ -69,15 +69,17 @@ describe("leave request limits and the sandwich rule", () => {
     await cleanupEmployeeTestOrgMasters(org);
   });
 
-  it("off (the default): Friday to Monday is 2 days, a long request and short notice are accepted", async () => {
-    expect((await apply("emp", "2026-12-04", "2026-12-07")).body.totalDays).toBe(2);
+  // Changed 2026-11-18 (audit fix, CHANGED_TESTS.md): leave days follow the person's own week-off pattern. Test employees are on the Sunday-only pattern, so the
+  // Saturday is a working day and counts (before: a built-in Saturday-and-Sunday default made it 2).
+  it("off (the default): Friday to Monday is 3 days on a Sunday-only pattern, a long request and short notice are accepted", async () => {
+    expect((await apply("emp", "2026-12-04", "2026-12-07")).body.totalDays).toBe(3);
     expect((await apply("emp", "2026-12-02", "2026-12-02")).status).toBe(201);
   });
 
   it("the sandwich rule on for PL: Friday to Monday is 4 days", async () => {
     await setPolicy("policy.sandwich", { active: true, leaveTypes: ["PL"] }, t.d1!, t.d2!);
     expect((await apply("emp", "2026-12-11", "2026-12-14")).body.totalDays).toBe(4);
-    expect((await apply("emp", "2026-12-19", "2026-12-21")).body.totalDays).toBe(1); // Saturday start: not between two leave days
+    expect((await apply("emp", "2026-12-19", "2026-12-21")).body.totalDays).toBe(3); // changed 2026-11-18: Saturday is a working day on this pattern, so Sunday sits between two leave days
   });
 
   it("limits on for PL (3 days, 7 days' notice): too long and too soon are refused; HR applying on someone's behalf is not held to notice", async () => {

@@ -70,11 +70,18 @@ export async function resendInvite(employeeId: string): Promise<InvitationDelive
   return data;
 }
 
+/** Directors only: change a person's employee number (their login ID). The reply carries the warning that the machine must be changed to match. */
+export async function changeEmployeeCode(employeeId: string, employeeCode: string, reason: string): Promise<{ employeeCode: string; previousEmployeeCode: string; warning: string }> {
+  const { data } = await apiClient.post<{ employeeCode: string; previousEmployeeCode: string; warning: string }>(`/api/employees/${employeeId}/employee-code`, { employeeCode, reason });
+  return data;
+}
+
 export interface PendingInvitation {
   employeeId: string;
   employeeCode: string;
   fullName: string;
   email: string;
+  noEmailOnRecord?: boolean;
   delivery: InvitationDelivery;
   skipped?: string;
 }
@@ -162,6 +169,8 @@ export async function deleteSavedView(id: string): Promise<void> {
 export interface EmployeeProfile {
   /** A-9: another person's contact numbers arrive masked (last 4); the full numbers are behind the audited reveal. */
   contactMasked?: boolean;
+  /** Audit fix 2026-11-18: personal email, phone, addresses and emergency contact withheld (no employee.personal.view); they arrive as null. */
+  personalHidden?: boolean;
   id: string;
   employeeCode: string;
   fullName: string;
@@ -172,20 +181,29 @@ export interface EmployeeProfile {
   status: string;
   // Phase 2: MANUAL = no device mapping in force — attendance is marked by hand.
   attendanceCapture: "DEVICE" | "MANUAL";
+  // Employee-number login (docs/plans/LOGIN_CHECKLIST.md): the employee number is the login ID and should equal the attendance machine ID.
+  deviceUserId: string | null;
+  /** null when there is no machine ID in force (manual capture). */
+  loginIdMatchesMachine: boolean | null;
+  /** No email on record: no password or setup link can reach this person. */
+  noEmailOnRecord: boolean;
+  /** When someone last asked for a link that could not be sent for want of an email. */
+  emailMissingRequestedAt: string | null;
   accountStatus: string | null;
   // Only while the account is still waiting for its owner to set a password.
   invitation: InvitationDelivery | null;
   totpEnabled: boolean;
   personal: {
-    dateOfBirth: string;
-    gender: string;
-    personalEmail: string;
-    mobile: string;
-    currentAddress: string;
-    permanentAddress: string;
-    emergencyContactName: string;
-    emergencyContactPhone: string;
-    emergencyContactRelation: string;
+    dateOfBirth: string | null;
+    gender: string | null;
+    // null when withheld (audit fix 2026-11-18: no employee.personal.view)
+    personalEmail: string | null;
+    mobile: string | null;
+    currentAddress: string | null;
+    permanentAddress: string | null;
+    emergencyContactName: string | null;
+    emergencyContactPhone: string | null;
+    emergencyContactRelation: string | null;
     bloodGroup: string | null;
     photoVersion: string | null;
   } | null;

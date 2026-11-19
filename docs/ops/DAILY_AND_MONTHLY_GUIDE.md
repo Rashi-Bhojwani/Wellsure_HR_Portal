@@ -96,3 +96,16 @@ Every screen that decides something records who did it and when (**Admin Tools �
 | A bank or PAN change shows "waiting for a director" | HR's bank and statutory entries wait for a director (on by default). | A director confirms it under Employee → Change Requests. |
 | "… is not in use" (overtime, work from home, encashment) | The setting is off. | The directors turn it on in Policy settings, if the company wants it. |
 | "Not set" | Nobody has chosen this value yet. | The screen says who sets it and where. |
+
+---
+
+## Lateness rule
+
+**Off by default.** While it is off, nothing changes anywhere. Plan and rules: `docs/plans/LATE_CHECKLIST.md`.
+
+- **Directors** (Admin → Workforce Management → Attendance → **Lateness Rule**): one director proposes the cutoffs (and whether the edge minute counts as late), what each band costs (no consequence, a late mark, a salary cut in days, or a fixed penalty), the free allowances each month, and the month it starts. The other director confirms. Missing punch and half-day thresholds are set on the same screen; until you choose them, the screen says **Default in use** and today's behaviour stays. Read the penalty note first: fines from wages are regulated by law, and the portal does not give legal advice.
+- **Salary cuts** reach payroll as loss of pay on the day. On a day that already loses pay for short hours, only the higher of the two applies.
+- **Penalties**: each month, after the month's run is calculated, open **Penalties to payroll** on the same screen, check the lines, press **Post to payroll**, then calculate the run again. Each penalty is its own payslip line. You never post your own: the other director does.
+- **Managers** (employee portal → Attendance → **Late Arrivals → My team**): **Ask to waive** one arrival, with a reason.
+- **HR** (Attendance → **Lateness Waivers**): waive or reject. You never decide a waiver you asked for, or your own arrival. A waived arrival has no consequence, and any allowance it used comes back.
+- **Employees** (Attendance → **Late Arrivals**): your late marks, the allowances you have left this month, and the status of any waiver.

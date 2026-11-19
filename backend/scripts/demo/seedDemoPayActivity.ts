@@ -146,6 +146,19 @@ export async function seedDemoPayActivity(): Promise<DemoActivityResult> {
   // This claim is approved after both runs, so it waits, approved, for the next run.
   await call(OWNER, "post", `reimbursements/${claims.approved}/decision`, { decision: "APPROVE" });
 
+  // ── Final settlement rules (owner decision 2026-11-17: they ship Not set and a settlement is refused until they exist). The demo's directors set DEMO values on its
+  // own head DEMO_BASIC: one enters, the other confirms, as on Default behaviours. Made-up figures for the demo only, never a statement of the law or of any policy.
+  const demoRounding = { mode: "HALF_UP", scale: 0 };
+  const chosen: Array<[string, unknown]> = [
+    ["payroll.gratuity", { effectiveFrom: "2020-01-01", minYears: "5", partYear: "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR", wageHeads: ["DEMO_BASIC"], daysPerYear: "15", divisor: "26", ceiling: "2000000", rounding: demoRounding, sourceNote: "DEMO COMPANY: made-up values" }],
+    ["payroll.noticeRecovery", { effectiveFrom: "2020-01-01", noticeDays: 30, recoverShortfall: true, basisHeads: ["DEMO_BASIC"], divisor: "30", rounding: demoRounding, sourceNote: "DEMO COMPANY: made-up values" }],
+    ["payroll.leaveEncashment", { payHead: "DEMO_SPECIAL", exitLeaveTypes: ["PL"], basisHeads: ["DEMO_BASIC"], divisor: { kind: "FIXED_DAYS", days: "30" }, rounding: demoRounding, sourceNote: "DEMO COMPANY: made-up values" }],
+  ];
+  for (const [key, value] of chosen) {
+    const p = await call(OWNER, "post", `behaviours/${key}/proposals`, { value, reason: "DEMO COMPANY: the demo's basic head" });
+    await call(SECOND, "post", `behaviours/proposals/${p.id}/confirm`);
+  }
+
   // ── Two leavers (last working day at the end of this month) and their settlements ──
   const lwd = iso(monthEnd(0));
   const leave = async (code: string) => {

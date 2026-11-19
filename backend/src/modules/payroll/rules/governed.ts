@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { PLACEHOLDER_SOURCE_LABEL, RULE_BY_KEY, RULE_CATALOG, type RuleDef } from "@shared/constants/payrollRules";
+import { CONTINUING, PACK_RULES, STANDARD_DEFAULT_LABEL, entryOn, isPackCovered } from "@shared/constants/statutoryDefaults";
+import { businessToday } from "../../../lib/businessDate";
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
 import { type CheckerAvailability } from "../approvals";
@@ -41,6 +43,13 @@ export interface RuleView {
   current: VersionView | null;
   /** The most recent Confirmed version, shown beside an edited one so nothing silently falls back and nothing is lost from view. */
   lastConfirmed: VersionView | null;
+  /**
+   * Standard defaults pack: the standard value in force today, when no director value is confirmed (it is the one payroll uses). `pending` says a director's edit is
+   * waiting for a different director's confirmation and is not used until then.
+   */
+  standard: { label: string; value: unknown; from: string | null; source: { name: string; url: string }; checkedOn: string; reviewNeeded: boolean; note: string; pending: boolean } | null;
+  /** The rule follows the company's state (PT, LWF): its standard answer is on the Standard statutory values panel. */
+  byState: boolean;
 }
 
 /** The open question on a rule, when it applies to the value in question (a question with no value named applies to all of them). */
@@ -76,7 +85,16 @@ function viewOf(def: RuleDef, data: Awaited<ReturnType<typeof loadItems>>): Rule
     openQuestion: openQuestionFor(def, s.current?.value),
     current: shown(def, s.current),
     lastConfirmed: shown(def, s.lastConfirmed),
+    standard: standardOf(def.key, s),
+    byState: def.key === "PT_SLABS" || def.key === "LWF_TABLE",
   };
+}
+
+function standardOf(key: string, s: ReturnType<typeof summarise>): RuleView["standard"] {
+  if (!isPackCovered(key) || s.current) return null;
+  const e = entryOn(PACK_RULES[key], businessToday().toISOString().slice(0, 10));
+  if (!e) return null;
+  return { label: STANDARD_DEFAULT_LABEL, value: e.value, from: e.from === CONTINUING ? null : e.from, source: e.source, checkedOn: e.checkedOn, reviewNeeded: e.verification === "UNVERIFIED", note: e.note, pending: false };
 }
 
 export async function listRules(): Promise<RuleView[]> {

@@ -174,9 +174,12 @@ export interface LeavePolicy {
   eligibilityMode: "DAYS" | "CALENDAR_MONTHS" | null;
   eligibilityValue: number | null;
   carryForwardCapDays: number | null;
+  /** Audit fix 2026-11-18: what year end carries into the new year; null = Not set (year end refuses). */
+  carryForwardRule: "CAPPED" | "UNLIMITED" | null;
   negativeBalanceAllowed: boolean;
   skipBalanceCheck: boolean;
-  yearEndEncashment: boolean;
+  /** null = Not set (year end refuses). */
+  yearEndEncashment: boolean | null;
   compOffMinHoursWorked: number | null;
   compOffExpiryDays: number | null;
   wfhMonthlyLimit: number | null;

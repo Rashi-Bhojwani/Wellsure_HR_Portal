@@ -26,7 +26,7 @@ export function InvitationStatus({ employeeId, invitation, onChange }: { employe
       setCurrent(next);
       onChange?.(next);
     } catch (err) {
-      setProblem(apiErrorMessage(err, "Could not resend the invitation."));
+      setProblem(apiErrorMessage(err, "Could not send the setup link."));
     } finally {
       setBusy(false);
     }
@@ -43,9 +43,9 @@ export function InvitationStatus({ employeeId, invitation, onChange }: { employe
     alert = (
       <ApprovalBanner
         tone="success"
-        title={`Invitation email sent to ${current.to}`}
+        title={`Setup link sent to ${current.to}`}
         description={`The mail server accepted it${current.sentAt ? ` at ${when(current.sentAt)}` : ""}. That does not guarantee it reached the inbox: if they cannot find it, ask them to check spam, or resend.`}
-        actions={resendButton("Resend")}
+        actions={resendButton("Resend setup link")}
       />
     );
   } else if (current.status === "FILE_ONLY") {
@@ -54,14 +54,14 @@ export function InvitationStatus({ employeeId, invitation, onChange }: { employe
         tone="warning"
         title={`Nothing was emailed to ${current.to}`}
         description="This system is in development mode: the email was only written to a file on the server (backend/.mail/), so nobody has received it. Set the SMTP variables in backend/.env to send real emails (see GETTING_STARTED.md), then resend."
-        actions={resendButton("Resend")}
+        actions={resendButton("Resend setup link")}
       />
     );
   } else if (current.status === "FAILED") {
     alert = (
       <ApprovalBanner
         tone="danger"
-        title={`The invitation email to ${current.to} could not be sent`}
+        title={`The setup link to ${current.to} could not be sent`}
         description={
           <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <span>{current.error ?? "Sending failed."}</span>
@@ -75,9 +75,9 @@ export function InvitationStatus({ employeeId, invitation, onChange }: { employe
     alert = (
       <ApprovalBanner
         tone="info"
-        title={`No invitation has been sent to ${current.to || "this person"} yet`}
-        description="Their account exists but they cannot sign in until you send the invitation."
-        actions={resendButton("Send invitation")}
+        title={`No setup link has been sent to ${current.to || "this person"} yet`}
+        description="Their account exists with no password. Send a setup link, or they can use Forgot password on the sign-in page with their employee number."
+        actions={resendButton("Send setup link")}
       />
     );
   }

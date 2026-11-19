@@ -4,6 +4,7 @@ import { requireDirector } from "../../lib/directorAuthority";
 import { namesOfUsers } from "../payroll/names";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
+import { COMPANY_STATES, DEFAULT_REVIEW_INTERVAL_MONTHS, STANDARD_DEFAULT_LABEL } from "@shared/constants/statutoryDefaults";
 
 // D-37 (docs/plans/D37_DEFAULTS.md). Behaviour settings: each key's value in force is the latest proposal a DIFFERENT director confirmed; with none, it is the key's
 // default. Exactly three keys have a common default (the owners' D-37 exception, labelled "Default, change in settings"); the max-deduction percentage has none (Not set).
@@ -104,7 +105,7 @@ export const BEHAVIOURS = {
   },
   "payroll.leaveEncashment": {
     title: "Leave encashment amount (in the year and at exit)",
-    what: "The pay head, the leave types encashed at exit, the heads of the salary in force that make the per-day basis, the divisor (a fixed number of days or the month's calendar days) and the rounding. Until confirmed, encashment requests are not paid and a settlement shows leave in days only.",
+    what: "The pay head, the leave types encashed at exit, the heads of the salary in force that make the per-day basis, the divisor (a fixed number of days or the month's calendar days) and the rounding. Until confirmed, encashment requests are not paid and a final settlement is refused.",
     schema: z
       .object({
         payHead: z.string().regex(/^[A-Z][A-Z0-9_]{1,31}$/),
@@ -115,14 +116,15 @@ export const BEHAVIOURS = {
         sourceNote: z.string().trim().min(3).max(300),
       })
       .strict(),
+    // Owner decision 2026-11-17 (docs/plans/OWNER_EMPTY_SETTINGS.md): Not set until the directors choose it; a final settlement is refused until then.
     defaultValue: null as null | { payHead: string; exitLeaveTypes: string[]; basisHeads: string[]; divisor: { kind: "FIXED_DAYS"; days: string } | { kind: "CALENDAR_DAYS" }; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
     d37: false,
-    defaultText: "Not set: encashment requests are not paid; a settlement shows leave in days only",
+    defaultText: "Not set: encashment requests are not paid and a final settlement is refused until this is set",
   },
   // Part 4 (docs/plans/A_PART4.md): settlement mechanisms, every figure the directors'; each value carries the day it takes effect (effectiveFrom).
   "payroll.gratuity": {
     title: "Gratuity at exit",
-    what: "Who qualifies (least completed years of service), how a part year counts, the wage it uses (chosen heads of the salary in force on the last working day), days of wage per year of service and the divisor, the ceiling (or none), the rounding, and from when. Until confirmed, a settlement shows no gratuity line.",
+    what: "Who qualifies (least completed years of service), how a part year counts, the wage it uses (chosen heads of the salary in force on the last working day), days of wage per year of service and the divisor, the ceiling (or none), the rounding, and from when. Until confirmed (and in force on the last working day), a final settlement is refused.",
     schema: z
       .object({
         effectiveFrom: z.iso.date(),
@@ -138,11 +140,11 @@ export const BEHAVIOURS = {
       .strict(),
     defaultValue: null as null | { effectiveFrom: string; minYears: string; partYear: "COMPLETED_YEARS_ONLY" | "SIX_MONTHS_OR_MORE_COUNTS_AS_A_YEAR"; wageHeads: string[]; daysPerYear: string; divisor: string; ceiling: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
     d37: false,
-    defaultText: "Not set: a settlement shows no gratuity line",
+    defaultText: "Not set: a final settlement is refused until this is set",
   },
   "payroll.noticeRecovery": {
     title: "Notice period and its recovery at exit",
-    what: "The notice period in days, whether a shortfall is recovered, the per-day basis (chosen heads of the salary in force on the last working day divided by a number of days), the rounding, and from when. Notice runs from the day the separation was recorded to the last working day, both counted.",
+    what: "The notice period in days, whether a shortfall is recovered, the per-day basis (chosen heads of the salary in force on the last working day divided by a number of days), the rounding, and from when. Notice runs from the day the separation was recorded to the last working day, both counted. Until confirmed (and in force on the last working day), a final settlement is refused.",
     schema: z
       .object({
         effectiveFrom: z.iso.date(),
@@ -156,7 +158,7 @@ export const BEHAVIOURS = {
       .strict(),
     defaultValue: null as null | { effectiveFrom: string; noticeDays: number; recoverShortfall: boolean; basisHeads: string[]; divisor: string; rounding: { mode: "HALF_UP" | "UP" | "DOWN"; scale: number }; sourceNote: string },
     d37: false,
-    defaultText: "Not set: no notice recovery is worked out",
+    defaultText: "Not set: a final settlement is refused until this is set",
   },
   // Stage 8 (docs/plans/STAGE_8_PLAN.md): the parallel-run kit. The tolerance is a policy choice with a conventional default (exact match); the retention has none.
   "payroll.parallelTolerance": {
@@ -174,6 +176,70 @@ export const BEHAVIOURS = {
     defaultValue: null as number | null,
     d37: false,
     defaultText: "Not set: a comparison is kept until a director deletes it",
+  },
+  // Audit fix 2026-11-18 (docs/plans/AUDIT_FIXES.md item 2): which leave type plays each role, chosen by the directors (no type name is assumed).
+  "leave.earnedLeaveType": {
+    title: "Earned / paid leave type",
+    what: "The leave type that is credited every month (monthly accrual) and settled at year end (carry-forward and encashment). Any active leave type; its name and code are free.",
+    schema: z.string().min(1).max(64),
+    defaultValue: null as string | null,
+    d37: false,
+    defaultText: "Not set: the monthly accrual and the year-end run are refused until it is chosen",
+  },
+  "leave.compOffType": {
+    title: "Comp-off leave type",
+    what: "The leave type that holds comp-off: credited by a comp-off grant (with its expiry) and used first-in first-out. Any active leave type other than the earned leave type.",
+    schema: z.string().min(1).max(64),
+    defaultValue: null as string | null,
+    d37: false,
+    defaultText: "Not set: comp-off cannot be granted until it is chosen",
+  },
+  // Owner decision 2026-11-17: the company's state is Not set until a director chooses it; no state's PT, LWF or minimum wages are loaded.
+  "statutory.state": {
+    title: "State for professional tax, LWF and minimum wages",
+    what: "The state the company's professional tax, labour welfare fund and minimum wages follow. No state's values are loaded: after choosing it, a director enters its PT and LWF tables (Rules and setup) and its minimum wages (Payroll, Minimum Wages). Until the tables are entered no PT or LWF is deducted, and the run, the payslip and Ready for First Run say \"not set\" (never \"not levied\").",
+    schema: z.enum(Object.keys(COMPANY_STATES) as [string, ...string[]]),
+    defaultValue: null as string | null,
+    d37: false,
+    defaultText: "Not set: no professional tax or LWF is deducted, shown as \"not set\"",
+  },
+  "statutory.reviewIntervalMonths": {
+    title: "Standard statutory values: how often they are reviewed",
+    what: "After this many months since the last review (or when a value's effective date has passed since then), the directors are reminded to review the standard values.",
+    schema: z.number().int().min(1).max(24), // allow-number: months
+    defaultValue: DEFAULT_REVIEW_INTERVAL_MONTHS as number,
+    d37: false,
+    standard: true,
+    defaultText: "Every 6 months",
+  },
+  // Final merge 2026-11-19 (audit #13, docs/plans/FINAL_MERGE_REPORT.md): sign-in lifetimes, changed by one director and confirmed by another. Until then the
+  // conventional values are in force and the screen says "Default in use: ...". The refresh token and its browser cookie both follow staySignedInDays.
+  "auth.passwordResetLinkMinutes": {
+    title: "Forgot-password link: how long it works",
+    what: "Minutes a link from Forgot password (or a first-password link a person asks for) can be used, once. Links already sent keep the lifetime they were sent with.",
+    schema: z.number().int().min(5).max(1440), // allow-number: minutes, up to a day
+    defaultValue: 60 as number,
+    d37: false,
+    defaultInUse: true,
+    defaultText: "60 minutes (1 hour)",
+  },
+  "auth.staySignedInDays": {
+    title: "Stay signed in: how long a session lasts",
+    what: "Days a person stays signed in on a device without typing the password again. Each use renews it for this many days; signing out, a password change or HR suspending the account ends it at once. Sessions already open keep the end date they were given.",
+    schema: z.number().int().min(1).max(90), // allow-number: days
+    defaultValue: 30 as number,
+    d37: false,
+    defaultInUse: true,
+    defaultText: "30 days",
+  },
+  "payroll.ctcIncludesEmployerStatutory": {
+    title: "CTC includes the employer's PF and ESI (PY-43)",
+    what: "On: CTC = gross pay + employer PF + employer ESI, and a salary structure may count a line that stands for them toward CTC (the run pays the exact statutory figure, never the line as well). Off: CTC is gross pay only and such a line may not count toward CTC.",
+    schema: z.boolean(),
+    defaultValue: true as boolean,
+    d37: false,
+    standard: true,
+    defaultText: "On: CTC = gross + employer PF + employer ESI",
   },
 } as const;
 export type BehaviourKey = keyof typeof BEHAVIOURS;
@@ -198,7 +264,11 @@ export async function behaviourOn<K extends BehaviourKey>(key: K, day: string): 
     const v = r.value as { effectiveFrom?: string } | null;
     if (v?.effectiveFrom && v.effectiveFrom <= day && (!best || v.effectiveFrom >= best.effectiveFrom)) best = v as { effectiveFrom: string };
   }
-  return best as z.infer<(typeof BEHAVIOURS)[K]["schema"]> | null;
+  if (best) return best as z.infer<(typeof BEHAVIOURS)[K]["schema"]>;
+  // Standard defaults pack: with no confirmed value in force, a dated standard default applies from its own effective date.
+  const def = BEHAVIOURS[key].defaultValue as { effectiveFrom?: string } | null;
+  if ("standard" in BEHAVIOURS[key] && def?.effectiveFrom && def.effectiveFrom <= day) return def as z.infer<(typeof BEHAVIOURS)[K]["schema"]>;
+  return null;
 }
 
 /** The value in force: the latest confirmed proposal, or the key's default. */
@@ -223,15 +293,41 @@ export async function list(actor: Actor) {
       title: def.title,
       what: def.what,
       d37: def.d37,
+      standard: "standard" in def,
       value: current ? current.value : def.defaultValue,
-      state: current ? "CONFIRMED" : def.d37 ? "DEFAULT" : "NOT_SET",
-      label: current ? null : def.d37 ? DEFAULT_LABEL : "Not set",
+      state: current ? "CONFIRMED" : def.d37 || "standard" in def || "defaultInUse" in def ? "DEFAULT" : "NOT_SET",
+      label: current ? null : "defaultInUse" in def ? `Default in use: ${def.defaultText}` : "standard" in def ? STANDARD_DEFAULT_LABEL : def.d37 ? DEFAULT_LABEL : "Not set",
       defaultText: def.defaultText,
       confirmed: current ? { reason: current.reason, proposedBy: names.get(current.proposedByUserId) ?? "A director", confirmedBy: names.get(current.confirmation!.confirmedByUserId) ?? "A director", at: current.confirmation!.createdAt.toISOString() } : null,
       pending: pending.map((p) => ({ id: p.id, value: p.value, reason: p.reason, proposedBy: names.get(p.proposedByUserId) ?? "A director", mine: p.proposedByUserId === actor.userId, at: p.createdAt.toISOString() })),
     });
   }
   return { behaviours: out };
+}
+
+/** No silent zero (2026-11-17): the salary heads gratuity, notice pay and leave encashment use must be heads that exist in the company (salary components). */
+const HEAD_FIELDS: Partial<Record<BehaviourKey, (v: Record<string, unknown>) => string[]>> = {
+  "payroll.gratuity": (v) => (v.wageHeads as string[]) ?? [],
+  "payroll.noticeRecovery": (v) => (v.basisHeads as string[]) ?? [],
+  "payroll.leaveEncashment": (v) => [...((v.basisHeads as string[]) ?? []), ...(v.payHead ? [v.payHead as string] : [])],
+};
+async function refuseUnknownHeads(key: BehaviourKey, value: unknown): Promise<void> {
+  const pick = HEAD_FIELDS[key];
+  if (!pick || !value || typeof value !== "object") return;
+  const heads = [...new Set(pick(value as Record<string, unknown>))];
+  if (heads.length === 0) return;
+  const known = new Set((await prisma.payrollItemVersion.findMany({ where: { kind: "COMPONENT", key: { in: heads }, authorUserId: { not: null } }, distinct: ["key"], select: { key: true } })).map((r) => r.key));
+  const unknown = heads.filter((h) => !known.has(h));
+  if (unknown.length) throw new HttpError(400, `${unknown.map((h) => `'${h}'`).join(", ")} ${unknown.length === 1 ? "is not a salary head" : "are not salary heads"} in this company. Choose from the heads that exist (Payroll, Salary Components).`, "UNKNOWN_SALARY_HEAD", { heads: unknown });
+}
+
+/** Audit fix 2026-11-18: a leave type role must name an active leave type, and the two roles must be different types. */
+async function refuseBadLeaveTypeRole(key: BehaviourKey, value: unknown): Promise<void> {
+  if (key !== "leave.earnedLeaveType" && key !== "leave.compOffType") return;
+  const type = await prisma.leaveType.findUnique({ where: { id: String(value) }, select: { isActive: true, name: true } });
+  if (!type?.isActive) throw new HttpError(400, "Choose an active leave type (Admin Tools, Leave Types and Policies).", "UNKNOWN_LEAVE_TYPE");
+  const other = (await behaviourValue(key === "leave.earnedLeaveType" ? "leave.compOffType" : "leave.earnedLeaveType")).value;
+  if (other === value) throw new HttpError(400, `${type.name} already holds the other role. The earned leave type and the comp-off type must be different types.`, "SAME_LEAVE_TYPE_ROLE");
 }
 
 export const proposeSchema = z.object({ value: z.unknown(), reason: z.string().trim().min(3).max(300) }).strict();
@@ -244,6 +340,8 @@ export async function propose(key: string, raw: unknown, actor: Actor) {
   if (!body.success) throw new HttpError(400, body.error.issues.map((i) => i.message).join("; "), "VALIDATION_ERROR");
   const value = BEHAVIOURS[k].schema.safeParse(body.data.value);
   if (!value.success) throw new HttpError(400, value.error.issues.map((i) => i.message).join("; "), "VALIDATION_ERROR");
+  await refuseUnknownHeads(k, value.data);
+  await refuseBadLeaveTypeRole(k, value.data);
   const row = await prisma.behaviourProposal.create({ data: { key: k, value: value.data as object, reason: body.data.reason, proposedByUserId: actor.userId } });
   await writeAuditLog({ actorUserId: actor.userId, ipAddress: actor.ip ?? null, action: "settings.behaviour.proposed", entityType: "BehaviourProposal", entityId: row.id, after: { key: k, value: value.data, reason: body.data.reason } });
   return { id: row.id };

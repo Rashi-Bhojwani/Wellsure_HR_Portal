@@ -99,6 +99,8 @@ export interface TaxYearView {
   current: VersionView | null;
   lastConfirmed: VersionView | null;
   missing: string[];
+  /** Standard defaults pack: the standard year; `inUse` when no director version is confirmed (payroll uses it). */
+  standard?: { inUse: boolean; value: Record<string, unknown>; verification: string; unverifiedParts: string[] } | null;
 }
 export const taxYears = () => get<{ years: TaxYearView[] }>("/years");
 export const taxYear = (fy: string) => get<{ year: TaxYearView; history: VersionView[] }>(`/years/${fy}`);
