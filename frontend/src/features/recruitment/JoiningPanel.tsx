@@ -23,7 +23,7 @@ function save(blob: Blob, name: string) {
 
 function Convert({ offerId, onClose }: { offerId: string; onClose: () => void }) {
   const pre = useQuery({ queryKey: ["recruitment", "conversion", offerId], queryFn: () => offersApi.prefill(offerId) });
-  const designations = useQuery({ queryKey: ["recruitment", "designations"], queryFn: () => apiClient.get<Array<{ id: string; name: string }>>("/api/org/designations").then((r) => r.data) });
+  const designations = useQuery({ queryKey: ["recruitment", "designations"], queryFn: () => apiClient.get<{ items: Array<{ id: string; name: string; isActive?: boolean }> }>("/api/org/designations").then((r) => r.data.items.filter((d) => d.isActive !== false)) }); // the org API answers { items }
   const [form] = Form.useForm();
   const [key] = useState(() => crypto.randomUUID());
   const work = useWork<offersApi.ConversionResult>((r) => { (r.invitation?.status === "FAILED" ? toast.warning : toast.success)(offersApi.conversionMessage(r)); onClose(); });
