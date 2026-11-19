@@ -186,8 +186,13 @@ Fixes for failures caused by the merge or the post-merge fixes:
 
 ## 7. CI
 
-CI on the final commit: recorded in `STAGE_REPORTS.md`, "Final merge", once read with every job to the end. Pushes in between ran CI too, but those runs were
-not read (speed rule).
+CI run 445 (`44491794853`) on `25e3b91`, the final code-and-report commit, read once with every job to the end: **all 12 jobs green**.
+- install-lint-typecheck-test: lint, typecheck, tokens + bundle budgets, migrate, schema = migrations, seed, frontend + agent tests, demo company tests;
+- backend-tests (1) to (4), and backend-tests-complete (the shards add up to the suite, each test exactly once);
+- docker-build, agent-windows, latency (popovers + punch latency), attendance-replay;
+- sensitive-ui (admin portal), sensitive-ui (employee portal).
+
+CI ran on the pushes in between too, but those runs were not read (speed rule). This note is a docs-only commit after run 445; its own run was not read.
 
 ## 8. Decisions and what is not verified
 

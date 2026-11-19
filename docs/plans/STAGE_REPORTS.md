@@ -797,4 +797,5 @@ Verification:
   scroll, no pay figure for HR, a manager or the Developer; the waiver drawer opens by Enter, Esc closes it and focus returns. Found, predates the merge, not
   fixed: the Apply leave range picker keeps keyboard focus on "From".
 - Fixes for failures caused by the merge: none needed.
+- CI run 445 on `25e3b91`: all 12 jobs green, each read to the end.
 - Changed tests: `CHANGED_TESTS.md`, "Final merge (2026-11-19)".
