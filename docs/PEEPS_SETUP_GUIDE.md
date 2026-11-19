@@ -16,6 +16,12 @@ How a setting changes depends on where it lives (corrected in Stage 4 after the 
 
 Every entry, confirmation, approval and withdrawal is in the audit log.
 
+**Sign-in lifetimes (since the final merge, not Peeps settings).** How long a password-reset link lasts and how long "Stay signed in" keeps
+someone signed in are now **Default behaviours** in the main settings, entered by one director and confirmed by a different one (defaults:
+60 minutes and 30 days). The old `JWT_REFRESH_TTL` environment variable and the single-director reset-link field are gone. New employees,
+including joiners converted from recruitment, sign in with their employee number after setting a password through a single-use setup link.
+The Peeps settings that take effect on one director's save (recruitment, joining, exits, Insights, autofill) are unchanged.
+
 - **Not set**: nothing is used; the module (or just that step) refuses and names what is missing.
 - **Default, change in settings**: a conventional starting value is in use until a director confirms another.
 
@@ -70,6 +76,7 @@ asset categories/statuses/conditions, recruitment sources and rejection reasons,
 | Recruitment | Offer approval; referrals | Off |
 | Recruitment | HR runs onboarding | On |
 | Autofill | File types and size | PDF, PNG, JPEG; 10 MB |
+| Sign-in (main settings, two directors) | Password-reset link; "Stay signed in" | 60 minutes; 30 days |
 
 Rules that are fixed (not settings): a badge always needs a reason; badges follow the reporting line (down to anyone below,
 up to your manager and on to the directors; directors to anyone; never sideways, never yourself); weekly and monthly badges end
