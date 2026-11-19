@@ -169,6 +169,19 @@ identical reply; no distinct 423, and no per-number or per-IP wording on the sig
     "NOPE". That number now has its own counter, shared across addresses by design, so it reaches 5 and the second person gets 429. The per-IP
     separation the test is about still holds.
   - **Fix needed (not applied):** point the test at the new key and give the two people different numbers. No product code change is needed.
+- **Follow-up 2b (2026-11-19), the test-only fix, applied with the owner's go-ahead** (commit `78c536eb`; no sign-in code changed):
+  - **Changed tests:** `backend/src/middleware/__tests__/trustProxy.test.ts`, three tests.
+    - *"keys the limit on the address the ALB appended, ignoring forged entries to its left"*: now expects the key
+      `ratelimit:auth.loginFail.ip:203.0.113.7`.
+    - *"one person failing does not lock out a different person behind the same ALB"*: the two people now use different made-up numbers.
+    - *"with no proxy trusted, the header is ignored entirely"*: now reads the `ratelimit:auth.loginFail.ip:*` keys.
+  - **Reason:** follow-up 2 counts failed sign-ins per IP inside the auth service under the new key. It also counts them per employee number
+    across all addresses, so a number reused by every attempt reaches its own limit at 5.
+  - Each attempt in the file now uses its own made-up number. That keeps the per-number limit out of the way, so the per-IP limit (10 failures)
+    these tests are about is what they actually exercise. All 4 tests in the file pass.
+  - **Full backend suite, run alone once before pushing:** 265 files, 2319 tests, all passed. No other test encoded the old rate-limit behaviour,
+    so nothing else was changed.
+  - **CI on the final commit:** FOLLOWUP2B_CI
 
 ## Not verified / for the owners
 
