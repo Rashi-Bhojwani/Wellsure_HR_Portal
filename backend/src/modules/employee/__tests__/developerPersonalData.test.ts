@@ -90,8 +90,12 @@ describe("the Developer sees no personal contact details", () => {
     const devList = await get("dev", "/api/people?search=" + encodeURIComponent(p.target!.employeeCode));
     const entry = (devList.body.entries ?? devList.body.items ?? devList.body).find?.((x: { id: string }) => x.id === p.target!.employeeId);
     expect(entry?.personalEmail).toBeUndefined();
+    // Peeps final merge (2026-11-19, CHANGED_TESTS.md): the owners' Peeps directory decision is that a colleague never sees a personal email in the
+    // directory, whatever the company toggle ("personal email never shows", PEEPS_PLAN Module 1; employees do not read each other's data). The
+    // Developer half of this test is unchanged.
     const emp = await get("emp", `/api/people/${p.target!.employeeId}`);
-    expect(emp.body.personalEmail).toBe(target.personalEmail);
+    expect(emp.status).toBe(200);
+    expect(emp.body.personalEmail).toBeUndefined();
   });
 
   it("the audit log hides every value from the Developer (as before)", async () => {
