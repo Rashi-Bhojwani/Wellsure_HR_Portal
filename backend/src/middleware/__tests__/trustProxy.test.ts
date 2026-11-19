@@ -6,9 +6,14 @@ import { redis } from "../../lib/redis";
 
 // Behind the ALB the client's address is the entry the ALB appended to X-Forwarded-For; anything a client writes to the left of it is
 // the client's own claim. The login rate limit is keyed by req.ip, so a forged header must neither dodge it nor frame somebody else.
-const LOGIN_KEYS = "ratelimit:auth.rateLimit.login:*";
+// Changed 2026-11-19 (docs/plans/LOGIN_REPORT.md, follow-up 2): failed sign-ins are now counted per IP in the auth service under
+// ratelimit:auth.loginFail.ip:<ip> (the route-level ratelimit:auth.rateLimit.login:<ip> is gone), and also per employee number across all
+// addresses. Each attempt here therefore uses its own made-up number, so only the per-IP limit (10 failures) is in play.
+const LOGIN_KEYS = "ratelimit:auth.loginFail.ip:*";
+let seq = 0;
 const attempt = (app: ReturnType<typeof createApp>, xff?: string) => {
-  const r = request(app).post("/api/auth/login").send({ employeeCode: "NOPE", password: "wrong-password-1" });
+  seq += 1;
+  const r = request(app).post("/api/auth/login").send({ employeeCode: `NOPE-${seq}`, password: "wrong-password-1" });
   return xff ? r.set("X-Forwarded-For", xff) : r;
 };
 
@@ -28,7 +33,7 @@ describe("trust proxy: exactly one hop", () => {
     for (let i = 1; i <= 11; i++) last = (await attempt(app, `198.51.100.${i}, 203.0.113.7`)).status;
     expect(last).toBe(429);
     const keys = await redis.keys(LOGIN_KEYS);
-    expect(keys).toEqual(["ratelimit:auth.rateLimit.login:203.0.113.7"]);
+    expect(keys).toEqual(["ratelimit:auth.loginFail.ip:203.0.113.7"]);
   });
 
   it("one person failing does not lock out a different person behind the same ALB", async () => {
