@@ -31,9 +31,8 @@ function clearRefreshCookie(res: Response): void {
 
 function sendLoginResult(res: Response, result: LoginResult): void {
   if (result.status === "authenticated") {
-    // 30d matches JWT_REFRESH_TTL's default; the cookie's actual expiry
-    // is driven by the token row itself, this is just the browser-facing copy.
-    setRefreshCookie(res, result.refreshToken, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+    // The cookie expires exactly when the token row does ("Stay signed in", Default behaviours).
+    setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
     res.status(200).json({ accessToken: result.accessToken, user: result.user });
     return;
   }
@@ -57,8 +56,8 @@ export async function refresh(req: Request, res: Response): Promise<void> {
   if (!presented) {
     throw new HttpError(401, "No session found.", "INVALID_REFRESH_TOKEN");
   }
-  const { accessToken, refreshToken } = await authService.refresh(presented, requestMeta(req));
-  setRefreshCookie(res, refreshToken, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+  const { accessToken, refreshToken, refreshExpiresAt } = await authService.refresh(presented, requestMeta(req));
+  setRefreshCookie(res, refreshToken, refreshExpiresAt);
   res.status(200).json({ accessToken });
 }
 
@@ -152,7 +151,7 @@ export async function verifyTotp(req: Request, res: Response): Promise<void> {
     // This was the login-time setup challenge — finish logging in now.
     const result = await authService.completeLoginAfterTotpSetup(userId, requestMeta(req));
     if (result.status === "authenticated") {
-      setRefreshCookie(res, result.refreshToken, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+      setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
       res.status(200).json({ accessToken: result.accessToken, user: result.user, backupCodes });
       return;
     }

@@ -35,6 +35,7 @@ import {
 import { sendInvitationEmail, sendPasswordResetEmail, sendWelcomeEmail } from "./emails";
 import type { LoginResult, LoginTokens, RequestMetaInput } from "./types";
 import { inForceOn } from "../../lib/effectiveDating";
+import { behaviourValue } from "../behaviours/service";
 import { redis } from "../../lib/redis";
 import { createNotification } from "../notifications/service";
 import { findEmployeeIdByLoginId, normaliseLoginId } from "./loginId";
@@ -66,10 +67,9 @@ async function getInvitationTtlHours(): Promise<number> {
   return getSetting("auth.invitationTtlHours", DEFAULT_INVITATION_TTL_HOURS);
 }
 
-// A "Forgot password" link: 60 minutes unless the setting says otherwise.
-export const DEFAULT_PASSWORD_RESET_TTL_MINUTES = 60;
+// A "Forgot password" link: Default behaviours, "Forgot-password link" (two directors; default 60 minutes, shown as "Default in use").
 async function getPasswordResetTtlMinutes(): Promise<number> {
-  return getSetting("auth.passwordResetTtlMinutes", DEFAULT_PASSWORD_RESET_TTL_MINUTES);
+  return (await behaviourValue("auth.passwordResetLinkMinutes")).value;
 }
 
 // The Zod schema's own .min(8) (validators.ts) is an absolute floor that
@@ -108,7 +108,7 @@ async function completeLogin(
 ): Promise<LoginTokens> {
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   const accessToken = signAccessToken(user.id);
-  const { token: refreshToken } = await issueRefreshToken(user.id, meta);
+  const { token: refreshToken, row: refreshRow } = await issueRefreshToken(user.id, meta);
   await writeAuditLog({
     actorUserId: user.id,
     action: "auth.login.success",
@@ -121,6 +121,7 @@ async function completeLogin(
     status: "authenticated",
     accessToken,
     refreshToken,
+    refreshExpiresAt: refreshRow.expiresAt,
     user: {
       employeeCode: employee.employeeCode,
       roleCodes,
@@ -318,7 +319,7 @@ export async function completeLoginTotp(
 export async function refresh(
   presentedToken: string,
   meta: RequestMetaInput,
-): Promise<{ accessToken: string; refreshToken: string }> {
+): Promise<{ accessToken: string; refreshToken: string; refreshExpiresAt: Date }> {
   const outcome = await checkRefreshToken(presentedToken);
 
   if (outcome.kind === "reused") {
@@ -353,7 +354,7 @@ export async function refresh(
     // a hard logout) matches that.
     throw new HttpError(401, "Session refresh in progress elsewhere. Please retry.", "REFRESH_RACE_LOST");
   }
-  const { token: newRefreshToken } = rotated;
+  const { token: newRefreshToken, row: newRow } = rotated;
   const accessToken = signAccessToken(user.id);
   await writeAuditLog({
     actorUserId: user.id,
@@ -363,7 +364,7 @@ export async function refresh(
     ipAddress: meta.ipAddress,
     userAgent: meta.userAgent,
   });
-  return { accessToken, refreshToken: newRefreshToken };
+  return { accessToken, refreshToken: newRefreshToken, refreshExpiresAt: newRow.expiresAt };
 }
 
 export async function logout(presentedToken: string | undefined, userId: string): Promise<void> {
@@ -889,7 +890,7 @@ export async function adminUnlock(userId: string, meta: AdminSecurityMeta): Prom
   await writeAuditLog({ ...securityAuditFields(meta), action: "auth.unlocked_by_admin", entityType: "User", entityId: userId });
 }
 
-// Issues a password-reset link (auth.passwordResetTtlMinutes, default 1 hour; single use) and emails it to the
+// Issues a password-reset link (Default behaviours auth.passwordResetLinkMinutes, default 1 hour; single use) and emails it to the
 // personal email on file. Returns the link only for the break-glass CLI,
 // whose operator may need to hand it over when email itself is the problem.
 export async function adminIssuePasswordReset(userId: string, meta: AdminSecurityMeta): Promise<{ link: string; emailedTo: string | null }> {

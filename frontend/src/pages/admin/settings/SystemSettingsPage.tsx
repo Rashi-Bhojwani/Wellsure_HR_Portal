@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Col, Form, Input, InputNumber, Row, Select, Switch } from "antd";
+import { Button, Col, Form, Input, InputNumber, Row, Select, Switch, Typography } from "antd";
 import {
   MailOutlined,
   AlertOutlined,
@@ -508,9 +508,9 @@ function SecuritySettingsCard() {
               </Form.Item>
             </Col>
             <Col {...half}>
-              <Form.Item name="passwordResetTtlMinutes" label="Forgot-password link validity (minutes)" extra="The link a person asks for themselves." rules={[{ required: true }]}>
-                <InputNumber min={5} max={1440} style={{ width: "100%" }} />
-              </Form.Item>
+              <Typography.Text type="secondary">
+                The Forgot-password link&apos;s lifetime and how long a person stays signed in are set under Default behaviours, Sign-in lifetimes (one director proposes, another confirms).
+              </Typography.Text>
             </Col>
           </Row>
 

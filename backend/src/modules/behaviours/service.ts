@@ -212,6 +212,26 @@ export const BEHAVIOURS = {
     standard: true,
     defaultText: "Every 6 months",
   },
+  // Final merge 2026-11-19 (audit #13, docs/plans/FINAL_MERGE_REPORT.md): sign-in lifetimes, changed by one director and confirmed by another. Until then the
+  // conventional values are in force and the screen says "Default in use: ...". The refresh token and its browser cookie both follow staySignedInDays.
+  "auth.passwordResetLinkMinutes": {
+    title: "Forgot-password link: how long it works",
+    what: "Minutes a link from Forgot password (or a first-password link a person asks for) can be used, once. Links already sent keep the lifetime they were sent with.",
+    schema: z.number().int().min(5).max(1440), // allow-number: minutes, up to a day
+    defaultValue: 60 as number,
+    d37: false,
+    defaultInUse: true,
+    defaultText: "60 minutes (1 hour)",
+  },
+  "auth.staySignedInDays": {
+    title: "Stay signed in: how long a session lasts",
+    what: "Days a person stays signed in on a device without typing the password again. Each use renews it for this many days; signing out, a password change or HR suspending the account ends it at once. Sessions already open keep the end date they were given.",
+    schema: z.number().int().min(1).max(90), // allow-number: days
+    defaultValue: 30 as number,
+    d37: false,
+    defaultInUse: true,
+    defaultText: "30 days",
+  },
   "payroll.ctcIncludesEmployerStatutory": {
     title: "CTC includes the employer's PF and ESI (PY-43)",
     what: "On: CTC = gross pay + employer PF + employer ESI, and a salary structure may count a line that stands for them toward CTC (the run pays the exact statutory figure, never the line as well). Off: CTC is gross pay only and such a line may not count toward CTC.",
@@ -275,8 +295,8 @@ export async function list(actor: Actor) {
       d37: def.d37,
       standard: "standard" in def,
       value: current ? current.value : def.defaultValue,
-      state: current ? "CONFIRMED" : def.d37 || "standard" in def ? "DEFAULT" : "NOT_SET",
-      label: current ? null : "standard" in def ? STANDARD_DEFAULT_LABEL : def.d37 ? DEFAULT_LABEL : "Not set",
+      state: current ? "CONFIRMED" : def.d37 || "standard" in def || "defaultInUse" in def ? "DEFAULT" : "NOT_SET",
+      label: current ? null : "defaultInUse" in def ? `Default in use: ${def.defaultText}` : "standard" in def ? STANDARD_DEFAULT_LABEL : def.d37 ? DEFAULT_LABEL : "Not set",
       defaultText: def.defaultText,
       confirmed: current ? { reason: current.reason, proposedBy: names.get(current.proposedByUserId) ?? "A director", confirmedBy: names.get(current.confirmation!.confirmedByUserId) ?? "A director", at: current.confirmation!.createdAt.toISOString() } : null,
       pending: pending.map((p) => ({ id: p.id, value: p.value, reason: p.reason, proposedBy: names.get(p.proposedByUserId) ?? "A director", mine: p.proposedByUserId === actor.userId, at: p.createdAt.toISOString() })),

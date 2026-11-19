@@ -17,7 +17,6 @@ export const updateSettingsSchema = z.object({
   lockoutMinutes: z.number().int().min(1).max(1440).optional(),
   passwordMinLength: z.number().int().min(6).max(64).optional(),
   invitationTtlHours: z.number().int().min(1).max(336).optional(),
-  passwordResetTtlMinutes: z.number().int().min(5).max(1440).optional(),
   requireDirectorTwoFactor: z.boolean().optional(),
   require2faRoles: z.array(z.enum(["SUPER_ADMIN", "HR_ADMIN", "HR_EXECUTIVE", "PAYROLL_ADMIN", "MANAGER", "APPROVER", "EMPLOYEE"])).optional(),
   rateLimits: z

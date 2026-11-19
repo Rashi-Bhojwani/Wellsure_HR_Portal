@@ -136,7 +136,7 @@ describe("leave type roles, year end and leave type limits over the database", (
     expect(await prisma.yearEndRun.count({ where: { leaveYear: 2026, status: "PREVIEW", previewedByUserId: u.d1! } })).toBe(0);
   });
 
-  // The Developer role holds leave.policy.manage by its own design (shared/constants/sensitiveData.ts), so it is not among the refused here.
+  // The Developer no longer holds leave.policy.manage (final merge 2026-11-19); its 403 on every policy route is in developerLeavePolicy.test.ts.
   it("the leave policy screen's year-end fields: HR with leave.policy.manage sets them; an employee and a manager are refused; CAPPED needs the number", async () => {
     for (const who of ["emp", "mgr"]) expect((await call(who, "put", `/api/leave/types/${earnId}/policy`, { carryForwardRule: "UNLIMITED" })).status, who).toBe(403);
     expect((await call("hr", "put", `/api/leave/types/${earnId}/policy`, { carryForwardRule: "CAPPED" })).body.error.code).toBe("VALIDATION_ERROR");

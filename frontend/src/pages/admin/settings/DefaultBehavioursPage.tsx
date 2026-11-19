@@ -25,6 +25,9 @@ function describe(b: Pick<Behaviour, "key" | "value">, leaveTypeNames: ReadonlyM
   if (b.key === "statutory.state") return typeof b.value === "string" ? `${stateLabel(b.value)}. Its PT and LWF tables are entered under Rules and setup, its minimum wages on Minimum Wages.` : "Not set: no professional tax or LWF is deducted, and the run and payslip say \"not set\" (not \"not levied\")";
   if (b.key === "leave.earnedLeaveType" || b.key === "leave.compOffType") return typeof b.value === "string" ? `${leaveTypeName(b.value)}` : b.key === "leave.earnedLeaveType" ? "Not set: the monthly accrual and the year-end run are refused until it is chosen" : "Not set: comp-off cannot be granted until it is chosen";
   if (b.key === "statutory.reviewIntervalMonths") return `Every ${String(b.value)} month(s)`;
+  // Final merge 2026-11-19 (audit #13): sign-in lifetimes.
+  if (b.key === "auth.passwordResetLinkMinutes") return `A Forgot-password link works for ${String(b.value)} minutes, once`;
+  if (b.key === "auth.staySignedInDays") return `A person stays signed in for ${String(b.value)} day(s) on a device, renewed each time it is used`;
   if (b.key === "payroll.ctcIncludesEmployerStatutory") return v === true ? "On: CTC = gross + employer PF + employer ESI" : "Off: CTC is gross pay only";
   if (b.key === "access.developerSeesSwipes") return v === true ? "On: the Developer role sees Employee Swipes" : "Off: the Developer role does not see Employee Swipes";
   if (b.key === "letters.employeeMayAsk") return Array.isArray(v) && v.length ? `Employees may ask for: ${v.join(", ")}` : "None: employees cannot ask for a letter";
@@ -72,6 +75,7 @@ function describe(b: Pick<Behaviour, "key" | "value">, leaveTypeNames: ReadonlyM
 const GROUPS: Array<{ id: string; title: string; intro: string; keys: string[] }> = [
   { id: "final-settlement", title: "Final settlement rules", intro: "Gratuity, notice pay and leave encashment. Not set until you choose them; a final settlement is refused until all three are set. Head choices list only the salary heads that exist in your company.", keys: ["payroll.gratuity", "payroll.noticeRecovery", "payroll.leaveEncashment"] },
   { id: "leave-roles", title: "Leave type roles", intro: "Which leave type is the earned / paid leave (monthly accrual and year end) and which is comp-off. Leave type names and codes are free; until a role is chosen, the run that needs it is refused.", keys: ["leave.earnedLeaveType", "leave.compOffType"] },
+  { id: "sign-in", title: "Sign-in lifetimes", intro: "How long a Forgot-password link works and how long a person stays signed in. The conventional values are in use until you change them; the session cookie always ends with the session.", keys: ["auth.passwordResetLinkMinutes", "auth.staySignedInDays"] },
   { id: "state", title: "Professional tax, LWF and minimum wages", intro: "Not set until you choose the state. No state's values are loaded: after choosing it, enter its PT and LWF tables (Rules and setup) and its minimum wages (Payroll, Minimum Wages).", keys: ["statutory.state"] },
 ];
 const GROUPED = new Set(GROUPS.flatMap((g) => g.keys));
@@ -79,7 +83,7 @@ const STATE_OPTIONS = Object.entries(COMPANY_STATES).map(([value, label]) => ({ 
 
 const ROUND_LABEL: Record<string, string> = { HALF_UP: "Half up", HALF_EVEN: "Half even", UP: "Up", DOWN: "Down", CEIL: "Ceiling", FLOOR: "Floor" };
 
-type FormValues = { reason: string; stateKey?: string; leaveTypeId?: string; months?: number; allowance?: string; retentionDays?: number; effectiveFrom?: string; minYears?: string; partYear?: string; daysPerYear?: string; divisor?: string; ceiling?: string; noticeDays?: number; recoverShortfall?: string; payHead?: string; rateMode?: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string; exitLeaveTypes?: string[]; divisorKind?: string; divisorDays?: string; codes?: string[]; roundMode?: string; scale?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
+type FormValues = { reason: string; stateKey?: string; leaveTypeId?: string; months?: number; allowance?: string; retentionDays?: number; effectiveFrom?: string; minYears?: string; partYear?: string; daysPerYear?: string; divisor?: string; ceiling?: string; noticeDays?: number; recoverShortfall?: string; payHead?: string; rateMode?: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string; exitLeaveTypes?: string[]; divisorKind?: string; divisorDays?: string; codes?: string[]; roundMode?: string; scale?: number; minutes?: number; days?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
 
 export function DefaultBehavioursPage() {
   const queryClient = useQueryClient();
@@ -111,6 +115,8 @@ export function DefaultBehavioursPage() {
         : key === "statutory.state" ? v.stateKey
         : key === "leave.earnedLeaveType" || key === "leave.compOffType" ? v.leaveTypeId
         : key === "statutory.reviewIntervalMonths" ? v.months
+        : key === "auth.passwordResetLinkMinutes" ? v.minutes
+        : key === "auth.staySignedInDays" ? v.days
         : key === "payroll.ctcIncludesEmployerStatutory" ? v.on === "on"
         : key === "payroll.leaveEncashment" ? { payHead: v.payHead, exitLeaveTypes: v.exitLeaveTypes ?? [], basisHeads: v.basisHeads ?? [], divisor: v.divisorKind === "CALENDAR_DAYS" ? { kind: "CALENDAR_DAYS" } : { kind: "FIXED_DAYS", days: v.divisorDays }, rounding: { mode: v.roundMode, scale: v.scale }, sourceNote: v.sourceNote }
         : Object.fromEntries((v.rules ?? []).filter((r) => r?.typeKey && r?.rule).map((r) => [r.typeKey, r.rule]));
@@ -128,6 +134,8 @@ export function DefaultBehavioursPage() {
     if (b.key === "statutory.state" && typeof b.value === "string") form.setFieldsValue({ stateKey: b.value });
     if ((b.key === "leave.earnedLeaveType" || b.key === "leave.compOffType") && typeof b.value === "string") form.setFieldsValue({ leaveTypeId: b.value });
     if (b.key === "statutory.reviewIntervalMonths" && typeof b.value === "number") form.setFieldsValue({ months: b.value });
+    if (b.key === "auth.passwordResetLinkMinutes" && typeof b.value === "number") form.setFieldsValue({ minutes: b.value });
+    if (b.key === "auth.staySignedInDays" && typeof b.value === "number") form.setFieldsValue({ days: b.value });
     if (b.key === "payroll.parallelTolerance") form.setFieldsValue({ allowance: (v as { allowance?: string } | null)?.allowance ?? "0" });
     if (b.key === "letters.employeeMayAsk") form.setFieldsValue({ codes: Array.isArray(v) ? (v as string[]) : [] });
     if (b.key === "leave.leavingMonthAccrual") form.setFieldsValue({ mode: (v as { mode: string }).mode, minDays: (v as { minDays?: number }).minDays });
@@ -205,6 +213,12 @@ export function DefaultBehavioursPage() {
             <Form.Item name="leaveTypeId" label="Leave type" rules={[{ required: true, message: "Choose the leave type" }]}>
               <Select showSearch optionFilterProp="label" placeholder="Choose a leave type" options={(leaveTypes.data ?? []).filter((t) => t.isActive).map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }))} />
             </Form.Item>
+          )}
+          {editing?.key === "auth.passwordResetLinkMinutes" && (
+            <Form.Item name="minutes" label="A Forgot-password link works for (minutes, 5 to 1440)" rules={[{ required: true }]}><InputNumber min={5} max={1440} style={{ width: "100%" }} /></Form.Item>
+          )}
+          {editing?.key === "auth.staySignedInDays" && (
+            <Form.Item name="days" label="Stay signed in for (days, 1 to 90)" rules={[{ required: true }]}><InputNumber min={1} max={90} style={{ width: "100%" }} /></Form.Item>
           )}
           {editing?.key === "statutory.reviewIntervalMonths" && (
             <Form.Item name="months" label="Review the standard values every (months)" rules={[{ required: true }]}><InputNumber min={1} max={24} style={{ width: "100%" }} /></Form.Item>

@@ -39,11 +39,10 @@ const RATE_LIMIT_SETTING_KEY: Record<(typeof RATE_LIMIT_KEYS)[number], string> =
 };
 
 export async function getSettings(): Promise<SecuritySettings> {
-  const [lockout, passwordMinLength, invitationTtlHours, passwordResetTtlMinutes, require2faRoles, requireDirectorTwoFactor, ...rateLimitValues] = await Promise.all([
+  const [lockout, passwordMinLength, invitationTtlHours, require2faRoles, requireDirectorTwoFactor, ...rateLimitValues] = await Promise.all([
     getSetting("auth.lockout", { maxAttempts: 5, lockoutMinutes: 15 }),
     getSetting("auth.passwordMinLength", 8),
     getSetting("auth.invitationTtlHours", 168), // 7 days: the setup link HR sends (auth/service.ts DEFAULT_INVITATION_TTL_HOURS)
-    getSetting("auth.passwordResetTtlMinutes", 60), // auth/service.ts DEFAULT_PASSWORD_RESET_TTL_MINUTES
     getSetting<string[]>("auth.require2faRoles", default2faRoles()),
     directorTwoFactorRequired(),
     ...RATE_LIMIT_KEYS.map((k) => getSetting<RateLimitSetting>(RATE_LIMIT_SETTING_KEY[k], RATE_LIMIT_DEFAULTS[k])),
@@ -56,7 +55,6 @@ export async function getSettings(): Promise<SecuritySettings> {
     lockoutMinutes: lockout.lockoutMinutes,
     passwordMinLength,
     invitationTtlHours,
-    passwordResetTtlMinutes,
     require2faRoles,
     requireDirectorTwoFactor,
     rateLimits,
@@ -84,9 +82,6 @@ export async function updateSettings(input: UpdateInput, meta: { actorUserId: st
   }
   if (input.invitationTtlHours !== undefined) {
     await setSetting("auth.invitationTtlHours", input.invitationTtlHours, meta.actorUserId);
-  }
-  if (input.passwordResetTtlMinutes !== undefined) {
-    await setSetting("auth.passwordResetTtlMinutes", input.passwordResetTtlMinutes, meta.actorUserId);
   }
   if (input.require2faRoles !== undefined) {
     await setSetting("auth.require2faRoles", input.require2faRoles, meta.actorUserId);

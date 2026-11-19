@@ -373,18 +373,15 @@ describe("employee-number login", () => {
       expect(expired.body.error.code).toBe("INVALID_RESET_TOKEN");
     });
 
-    it("honours the auth.passwordResetTtlMinutes setting", async () => {
-      await prisma.systemSetting.upsert({ where: { key: "auth.passwordResetTtlMinutes" }, create: { key: "auth.passwordResetTtlMinutes", value: 15 }, update: { value: 15 } });
-      try {
-        const p = await person(`FX${uniq()}`);
-        await forgot(p.employeeCode);
-        const row = await prisma.passwordResetToken.findFirstOrThrow({ where: { userId: p.userId } });
-        const minutes = (row.expiresAt.getTime() - row.createdAt.getTime()) / 60_000;
-        expect(minutes).toBeGreaterThan(14);
-        expect(minutes).toBeLessThan(16);
-      } finally {
-        await prisma.systemSetting.update({ where: { key: "auth.passwordResetTtlMinutes" }, data: { value: 60 } });
-      }
+    // Changed 2026-11-19 (final merge, audit #13; CHANGED_TESTS.md): the link lifetime is now a two-director Default behaviour
+    // (auth.passwordResetLinkMinutes). This test set the old single-director System Settings key; the same check lives in signInLifetimes.test.ts.
+    it("a link lasts the default 60 minutes while the director setting is not changed", async () => {
+      const p = await person(`FX${uniq()}`);
+      await forgot(p.employeeCode);
+      const row = await prisma.passwordResetToken.findFirstOrThrow({ where: { userId: p.userId } });
+      const minutes = (row.expiresAt.getTime() - row.createdAt.getTime()) / 60_000;
+      expect(minutes).toBeGreaterThan(59);
+      expect(minutes).toBeLessThan(61);
     });
 
     it("a suspended account gets no link, and an old link stops working once the account is suspended", async () => {
