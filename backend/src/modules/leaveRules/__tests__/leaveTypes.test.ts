@@ -188,6 +188,27 @@ describe("new leave types", () => {
       expect((await post("manager", `/api/leave/requests/${r.body.id}/approve`)).status).toBe(200);
     });
 
+    it("final merge: a new type counting working days follows the person's own weekly-off pattern, not a fixed weekend", async () => {
+      // The contractor works Monday to Saturday (only Sunday off). Bereavement counts working days: Friday to Monday is Friday, Saturday and Monday
+      // = 3 (a fixed Saturday-Sunday weekend would have said 2). Calendar-day types count every day whatever the pattern.
+      const pattern = await prisma.weekOffPattern.create({ data: { code: `PEEPS_MONSAT_${Date.now().toString(36)}`, name: "DEMO Monday to Saturday", rules: [{ weekday: 0 }] as object } });
+      const holidays = new Set((await prisma.holiday.findMany({ select: { date: true } })).map((h) => iso(h.date)));
+      let fri = addCalendarDays(friday, 84);
+      while (fri.getUTCDay() !== 5 || [0, 1, 2, 3].some((o) => holidays.has(iso(addCalendarDays(fri, o))))) fri = addCalendarDays(fri, 1);
+      const mon = addCalendarDays(fri, 3);
+      const assignmentsBefore = await prisma.attendanceAssignment.findMany({ where: { employeeId: p.contractor.employeeId }, select: { id: true, weekOffPatternId: true } });
+      await prisma.attendanceAssignment.updateMany({ where: { employeeId: p.contractor.employeeId }, data: { weekOffPatternId: pattern.id } });
+      try {
+        const bereavement = await apply("contractor", "BEREAVEMENT", fri, mon);
+        expect(bereavement.status, JSON.stringify(bereavement.body)).toBe(201);
+        expect(Number(bereavement.body.totalDays)).toBe(3);
+        await post("contractor", `/api/leave/requests/${bereavement.body.id}/cancel`, { reason: "DEMO test" });
+      } finally {
+        for (const a of assignmentsBefore) await prisma.attendanceAssignment.update({ where: { id: a.id }, data: { weekOffPatternId: a.weekOffPatternId } });
+        await prisma.weekOffPattern.delete({ where: { id: pattern.id } });
+      }
+    });
+
     it("rules approved for a later date: the type is switched on, but leave before that date is refused", async () => {
       expect((await prepare("hrAdmin", "WEDDING", WEDDING_RULES)).status).toBe(201);
       expect((await approve("director", "WEDDING", 1, iso(addCalendarDays(friday, 30)))).status).toBe(200);
