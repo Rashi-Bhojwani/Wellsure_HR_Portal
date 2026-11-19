@@ -18,7 +18,7 @@ import {
   TEST_PASSWORD,
   type TestOrgMasters,
 } from "../../employee/__tests__/employeeTestHelpers";
-import { FORGOT_PASSWORD_MIN_DURATION_MS, LOGIN_FAILED_MESSAGE, LOGIN_FAILURE_MIN_DURATION_MS } from "../service";
+import { FORGOT_PASSWORD_MIN_DURATION_MS, LOGIN_FAILED_MESSAGE, LOGIN_FAILURE_MIN_DURATION_MS, LOGIN_TOO_MANY_MESSAGE } from "../service";
 import { FORGOT_PASSWORD_REPLY } from "@shared/constants/login";
 import { findEmployeeIdByLoginId } from "../loginId";
 
@@ -61,6 +61,12 @@ describe("employee-number login", () => {
   const uniq = () => randomUUID().slice(0, 6).toUpperCase();
   const forgot = (employeeCode: string, extra: object = {}) => request(app).post("/api/auth/forgot-password").send({ employeeCode, ...extra });
   const login = (employeeCode: string, password = TEST_PASSWORD) => request(app).post("/api/auth/login").send({ employeeCode, password });
+  // Clears only the per-IP sign-in counter (every request here comes from one address), leaving the per-number counters in place.
+  const clearIpCounters = async () => {
+    const { redis } = await import("../../../lib/redis");
+    const keys = await redis.keys("ratelimit:auth.loginFail.ip:*");
+    if (keys.length) await redis.del(...keys);
+  };
   const linkToken = (text: string, kind: "reset-password" | "set-password") => {
     const m = new RegExp(`/${kind}/([0-9a-f]{64})`).exec(text);
     if (!m) throw new Error(`no ${kind} link in: ${text.slice(0, 200)}`);
@@ -106,16 +112,14 @@ describe("employee-number login", () => {
       expect(invited.status).toBe(401);
       expect(invited.body).toEqual(unknown.body);
 
-      // The existing lockout rule (auth.lockout: 5 tries, 15 minutes) is reused as it is.
-      for (let i = 0; i < 5; i++) {
-        await clearRateLimits();
-        await login(code, "wrong-password");
-      }
-      await clearRateLimits();
+      // The existing limit (auth.lockout: 5 failures, 15 minutes) still applies; since follow-up 2 its reply is the one over-limit reply (429), not 423.
+      await clearIpCounters();
+      for (let i = 0; i < 5; i++) await login(code, "wrong-password");
       const locked = await login(code);
-      expect(locked.status).toBe(423);
-      expect(locked.body.error.code).toBe("LOCKED");
+      expect(locked.status).toBe(429);
+      expect(locked.body).toEqual({ error: { code: "TOO_MANY_ATTEMPTS", message: LOGIN_TOO_MANY_MESSAGE } });
       await prisma.user.update({ where: { id: p.userId }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+      await clearRateLimits();
     });
 
     it("an unknown number, a wrong password and an invited account are indistinguishable: body, status and timing", async () => {
@@ -152,6 +156,95 @@ describe("employee-number login", () => {
       // The same tolerance as the Forgot password timing test: no consistent gap of 100 ms or more between any two cases.
       const avgs = Object.values(times).map(avg);
       expect(Math.max(...avgs) - Math.min(...avgs)).toBeLessThan(100);
+    });
+
+    // Follow-up 2: a locked real account and an over-limit number nobody holds get the same reply, with the same status and timing.
+    it("over the limit, a real (locked) number and a non-existent number get an identical reply: body, status and timing", async () => {
+      const real = await person(`LR${uniq()}`);
+      const ghost = `LG${uniq()}`;
+      await clearIpCounters();
+      for (let i = 0; i < 5; i++) {
+        await login(real.employeeCode, "Wrong-Pass-1");
+        await login(ghost, "Wrong-Pass-1");
+      }
+      await clearIpCounters();
+      const cases = {
+        realLocked: () => login(real.employeeCode, TEST_PASSWORD), // even the right password is refused while locked
+        realLockedWrong: () => login(real.employeeCode, "Wrong-Pass-1"),
+        ghost: () => login(ghost, "Wrong-Pass-1"),
+        ghostLowerCaseSpaces: () => login(`  ${ghost.toLowerCase()} `, "Wrong-Pass-1"), // counted as typed, normalised like login
+      };
+      const bodies: Record<string, unknown> = {};
+      const statuses: Record<string, number> = {};
+      const times: Record<string, number[]> = { realLocked: [], realLockedWrong: [], ghost: [], ghostLowerCaseSpaces: [] };
+      for (let i = 0; i < 4; i++) {
+        for (const [name, run] of Object.entries(cases)) {
+          await clearIpCounters();
+          const t0 = process.hrtime.bigint();
+          const res = await run();
+          times[name]!.push(Number(process.hrtime.bigint() - t0) / 1e6);
+          bodies[name] = res.body;
+          statuses[name] = res.status;
+        }
+      }
+      const expected = { error: { code: "TOO_MANY_ATTEMPTS", message: "Too many attempts. Try again later or ask HR to unlock your account." } };
+      for (const name of Object.keys(cases)) {
+        expect(statuses[name], name).toBe(429);
+        expect(bodies[name], name).toEqual(expected);
+      }
+      for (const x of Object.values(times).flat()) expect(x).toBeGreaterThanOrEqual(LOGIN_FAILURE_MIN_DURATION_MS - 5);
+      const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+      const avgs = Object.values(times).map(avg);
+      expect(Math.max(...avgs) - Math.min(...avgs)).toBeLessThan(100);
+
+      // HR and directors still see, on their own screen, which real account is locked.
+      for (const who of ["hr", "dir"]) {
+        const access = await request(app).get(`/api/access/employees/${real.employeeId}`).set(...authHeader(t[who]!));
+        expect(access.status, who).toBe(200);
+        expect(access.body.locked, who).toBe(true);
+      }
+      await clearRateLimits();
+    });
+
+    it("the per-IP limit gives the same reply, for a real number with the right password and for an unknown one", async () => {
+      const real = await person(`IP${uniq()}`);
+      await clearRateLimits();
+      for (let i = 0; i < 10; i++) await login(`IPGHOST-${uniq()}`, "Wrong-Pass-1"); // ten different numbers: no number reaches its own limit
+      const a = await login(real.employeeCode, TEST_PASSWORD);
+      const b = await login(`IPGHOST-${uniq()}`, "Wrong-Pass-1");
+      expect([a.status, b.status]).toEqual([429, 429]);
+      expect(a.body).toEqual(b.body);
+      expect(a.body.error.message).toBe(LOGIN_TOO_MANY_MESSAGE);
+      expect(JSON.stringify(a.body)).not.toMatch(/employee number\.\.\.|this employee number/i);
+      await clearRateLimits();
+      expect((await login(real.employeeCode, TEST_PASSWORD)).status).toBe(200); // a successful sign-in is not counted or slowed
+    });
+
+    it("unlock still works: a director's unlock and the automatic unlock both let the right password in again", async () => {
+      const real = await person(`UL${uniq()}`);
+      await clearIpCounters();
+      for (let i = 0; i < 5; i++) await login(real.employeeCode, "Wrong-Pass-1");
+      expect((await login(real.employeeCode)).status).toBe(429);
+      // A director unlocks (with a reason); the counter goes too, so the right password works at once, and the unlock is audited.
+      const unlock = await request(app).post(`/api/access/employees/${real.employeeId}/unlock`).set(...authHeader(t.dir!)).send({ reason: "Forgot the new password" });
+      expect(unlock.status).toBe(200);
+      expect(unlock.body.locked).toBe(false);
+      expect(await prisma.auditLog.count({ where: { action: "auth.unlocked_by_admin", entityId: real.userId } })).toBe(1);
+      await clearIpCounters();
+      expect((await login(real.employeeCode)).status).toBe(200);
+
+      // Locked again, then left to run out: the counter expires and the recorded lock passes, as at the end of the 15 minutes.
+      await clearIpCounters();
+      for (let i = 0; i < 5; i++) await login(real.employeeCode, "Wrong-Pass-1");
+      expect((await login(real.employeeCode)).status).toBe(429);
+      const { redis } = await import("../../../lib/redis");
+      await redis.pexpire(`ratelimit:auth.loginFail.id:${real.employeeCode.toLowerCase()}`, 50);
+      await prisma.user.update({ where: { id: real.userId }, data: { lockedUntil: new Date(Date.now() - 1000) } });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      await clearIpCounters();
+      expect((await login(real.employeeCode)).status).toBe(200);
+      const after = await prisma.user.findUniqueOrThrow({ where: { id: real.userId } });
+      expect(after.failedLoginAttempts).toBe(0);
     });
 
     it("matches exactly after trimming spaces and ignoring case; leading zeros and letters are kept", async () => {

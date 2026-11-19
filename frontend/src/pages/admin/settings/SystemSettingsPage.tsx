@@ -37,7 +37,7 @@ import { SectionIntro, SectionNav, SettingsLayout, SwitchList, ToggleRow, type S
 const ROLE_OPTIONS = ["SUPER_ADMIN", "HR_ADMIN", "HR_EXECUTIVE", "PAYROLL_ADMIN", "MANAGER", "APPROVER", "EMPLOYEE"].map((r) => ({ value: r, label: r }));
 
 const RATE_LIMIT_LABELS: Record<keyof SecuritySettings["rateLimits"], string> = {
-  login: "Login",
+  login: "Sign-in (failed attempts per address)",
   totpVerify: "2FA verify",
   inviteAccept: "Accept invitation",
   forgotPassword: "Forgot password (per address)",

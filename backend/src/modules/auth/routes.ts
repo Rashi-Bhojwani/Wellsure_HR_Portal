@@ -19,7 +19,6 @@ import {
 // Defaults used when the corresponding SystemSetting row hasn't been
 // seeded/configured — see service.ts's getRequire2faRoles/getLockoutConfig
 // for the equivalent pattern on non-rate-limit settings.
-const LOGIN_RATE_LIMIT = { maxAttempts: 10, windowSeconds: 900 };
 const FORGOT_PASSWORD_RATE_LIMIT = { maxAttempts: 5, windowSeconds: 3600 };
 const INVITE_ACCEPT_RATE_LIMIT = { maxAttempts: 10, windowSeconds: 900 };
 const RESET_PASSWORD_RATE_LIMIT = { maxAttempts: 10, windowSeconds: 900 };
@@ -27,7 +26,9 @@ const TOTP_VERIFY_RATE_LIMIT = { maxAttempts: 10, windowSeconds: 900 };
 
 export const authRouter = Router();
 
-authRouter.post("/login", rateLimit("auth.rateLimit.login", LOGIN_RATE_LIMIT), validate({ body: loginSchema }), controller.login);
+// No route-level rate limit here: failed sign-ins are counted per number and per IP inside the service, so an over-limit reply is the same for every
+// number (service.ts, loginOverLimit). The per-IP limit is still the auth.rateLimit.login setting.
+authRouter.post("/login", validate({ body: loginSchema }), controller.login);
 authRouter.post(
   "/login/totp",
   rateLimit("auth.rateLimit.totpVerify", TOTP_VERIFY_RATE_LIMIT),

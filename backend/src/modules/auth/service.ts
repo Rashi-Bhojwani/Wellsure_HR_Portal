@@ -129,20 +129,16 @@ async function completeLogin(
   };
 }
 
-async function recordFailedLogin(userId: string, meta: RequestMetaInput): Promise<void> {
+// A real account's own record of its failed sign-ins, for HR's and directors' screens (Locked out, Unlock) and the audit log. The decision to refuse
+// is not taken from here but from the per-number counter (loginFailureCount below), which every typed number has, real or not; this record copies
+// that count, so the lock HR sees starts and ends with it.
+async function recordFailedLogin(userId: string, meta: RequestMetaInput, failuresForThisNumber: number): Promise<void> {
   const { maxAttempts, lockoutMinutes } = await getLockoutConfig();
-  const updated = await prisma.user.update({
+  const lockedOut = failuresForThisNumber >= maxAttempts;
+  await prisma.user.update({
     where: { id: userId },
-    data: { failedLoginAttempts: { increment: 1 } },
+    data: { failedLoginAttempts: failuresForThisNumber, ...(lockedOut ? { lockedUntil: new Date(Date.now() + lockoutMinutes * 60_000) } : {}) },
   });
-  let lockedOut = false;
-  if (updated.failedLoginAttempts >= maxAttempts) {
-    lockedOut = true;
-    await prisma.user.update({
-      where: { id: userId },
-      data: { lockedUntil: new Date(Date.now() + lockoutMinutes * 60_000) },
-    });
-  }
   await writeAuditLog({
     actorUserId: userId,
     action: lockedOut ? "auth.login.lockout" : "auth.login.failed",
@@ -153,6 +149,45 @@ async function recordFailedLogin(userId: string, meta: RequestMetaInput): Promis
   });
 }
 
+// ── Sign-in throttling (follow-up 2, docs/plans/LOGIN_REPORT.md) ─────────
+// Failed sign-ins are counted per employee number as typed (normalised as login matches it) whether or not the number exists, and per IP. Once
+// either count reaches its limit, every attempt for that number (or from that IP) gets one reply, the same for a real locked account and a number
+// nobody holds: 429, LOGIN_TOO_MANY_MESSAGE, padded like every failure. Limits: per number = auth.lockout (default 5 failures, lock for 15
+// minutes, counted within that window); per IP = auth.rateLimit.login (default 10 failures in 15 minutes). The lock ends by itself when the counter
+// expires, or when HR or a director unlocks the account (adminUnlock clears the counter too).
+export const LOGIN_TOO_MANY_MESSAGE = "Too many attempts. Try again later or ask HR to unlock your account.";
+export const LOGIN_IP_LIMIT_DEFAULT = { maxAttempts: 10, windowSeconds: 900 };
+
+function loginNumberKey(raw: string): string {
+  return `ratelimit:auth.loginFail.id:${normaliseLoginId(raw).toLowerCase()}`;
+}
+function loginIpKey(ip: string | null | undefined): string {
+  return `ratelimit:auth.loginFail.ip:${ip ?? "unknown"}`;
+}
+
+async function loginOverLimit(raw: string, ip: string | null | undefined): Promise<boolean> {
+  const [{ maxAttempts }, ipLimit] = await Promise.all([getLockoutConfig(), getSetting("auth.rateLimit.login", LOGIN_IP_LIMIT_DEFAULT)]);
+  const [forNumber, forIp] = await redis.mget(loginNumberKey(raw), loginIpKey(ip));
+  return Number(forNumber ?? 0) >= maxAttempts || Number(forIp ?? 0) >= ipLimit.maxAttempts;
+}
+
+/** Counts one failed sign-in for the number typed and for the IP; returns the number's count. The same for every number, held or not. */
+async function loginFailureCount(raw: string, ip: string | null | undefined): Promise<number> {
+  const [{ maxAttempts, lockoutMinutes }, ipLimit] = await Promise.all([getLockoutConfig(), getSetting("auth.rateLimit.login", LOGIN_IP_LIMIT_DEFAULT)]);
+  const numberKey = loginNumberKey(raw);
+  const forNumber = await redis.incr(numberKey);
+  // The window opens with the first failure; the failure that reaches the limit starts the lock period afresh, so the lock lasts lockoutMinutes.
+  if (forNumber === 1 || forNumber === maxAttempts) await redis.expire(numberKey, lockoutMinutes * 60);
+  const ipKey = loginIpKey(ip);
+  if ((await redis.incr(ipKey)) === 1) await redis.expire(ipKey, ipLimit.windowSeconds);
+  return forNumber;
+}
+
+/** Clears the failed-sign-in counter for an employee number (HR or director unlock). */
+export async function clearLoginFailures(employeeCode: string): Promise<void> {
+  await redis.del(loginNumberKey(employeeCode));
+}
+
 // The one reply every failed sign-in gets (owner decision 2026-11-18, docs/plans/LOGIN_REPORT.md): an unknown number, a wrong password and an
 // invited account with no password yet (and a suspended or deactivated one) are indistinguishable — same status, same words, same timing. The
 // first-time hint lives on the login screen as static text instead. Only the existing lockout keeps its own reply (unchanged rule).
@@ -161,6 +196,7 @@ export const LOGIN_FAILED_MESSAGE = "The employee number or password is not corr
 // Every failed sign-in takes at least this long. Each failure path also does the same expensive step (one argon2 verify, against the real hash or
 // a dummy one), so the floor only has to absorb the small database writes a wrong password adds.
 export const LOGIN_FAILURE_MIN_DURATION_MS = 400;
+// The over-limit reply is padded to the same floor.
 
 let dummyPasswordHash: Promise<string> | null = null;
 function dummyHash(): Promise<string> {
@@ -171,43 +207,60 @@ function dummyHash(): Promise<string> {
 // spec §3: login = employee number + password.
 export async function login(employeeCode: string, password: string, meta: RequestMetaInput): Promise<LoginResult> {
   const started = Date.now();
-  const fail = async (): Promise<never> => {
+  const pad = async (): Promise<void> => {
     const elapsed = Date.now() - started;
     if (elapsed < LOGIN_FAILURE_MIN_DURATION_MS) await new Promise((resolve) => setTimeout(resolve, LOGIN_FAILURE_MIN_DURATION_MS - elapsed));
+  };
+  const fail = async (): Promise<never> => {
+    await pad();
     throw new HttpError(401, LOGIN_FAILED_MESSAGE, "INVALID_CREDENTIALS");
+  };
+  const tooMany = async (): Promise<never> => {
+    await pad();
+    throw new HttpError(429, LOGIN_TOO_MANY_MESSAGE, "TOO_MANY_ATTEMPTS");
   };
   // The same work as checking a real password, for a person who has none to check.
   const burnVerify = async (): Promise<void> => {
     await argon2.verify(await dummyHash(), password).catch(() => false);
   };
 
+  // Over the limit for this number (held or not) or for this IP: decided before anything is looked up, so the reply cannot depend on the number.
+  if (await loginOverLimit(employeeCode, meta.ipAddress)) {
+    await burnVerify();
+    return tooMany();
+  }
+
   // The employee number, matched exactly after trimming spaces and ignoring case (loginId.ts).
   const employeeId = await findEmployeeIdByLoginId(employeeCode);
   const employee = employeeId ? await prisma.employee.findUnique({ where: { id: employeeId }, include: { user: true } }) : null;
   if (!employee?.user) {
     await burnVerify();
+    await loginFailureCount(employeeCode, meta.ipAddress);
     return fail();
   }
   const user = employee.user;
 
-  // Invited (no password yet), suspended or deactivated: exactly the reply an unknown number gets.
+  // Invited (no password yet), suspended or deactivated: exactly the reply an unknown number gets, counted the same way.
   if (user.status !== "ACTIVE") {
     await burnVerify();
+    await loginFailureCount(employeeCode, meta.ipAddress);
     return fail();
   }
+  // A lock recorded on the account whose counter has gone (for example Redis was emptied): still refused, with the same over-limit reply.
   if (user.lockedUntil && user.lockedUntil > new Date()) {
-    const minutes = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000);
-    throw new HttpError(423, `Account is locked. Try again in ${minutes} minute(s).`, "LOCKED");
+    await burnVerify();
+    return tooMany();
   }
   if (!user.passwordHash) {
     await burnVerify();
-    await recordFailedLogin(user.id, meta);
+    await recordFailedLogin(user.id, meta, await loginFailureCount(employeeCode, meta.ipAddress));
     return fail();
   }
   if (!(await argon2.verify(user.passwordHash, password))) {
-    await recordFailedLogin(user.id, meta);
+    await recordFailedLogin(user.id, meta, await loginFailureCount(employeeCode, meta.ipAddress));
     return fail();
   }
+  await clearLoginFailures(employeeCode);
 
   await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null } });
 
@@ -831,7 +884,8 @@ export async function adminResetTotp(userId: string, meta: AdminSecurityMeta): P
 // Clears a failed-login lockout. The reason is recorded too (E1.1 — E1
 // dropped it on this one path).
 export async function adminUnlock(userId: string, meta: AdminSecurityMeta): Promise<void> {
-  await prisma.user.update({ where: { id: userId }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+  const user = await prisma.user.update({ where: { id: userId }, data: { failedLoginAttempts: 0, lockedUntil: null }, include: { employee: { select: { employeeCode: true } } } });
+  await clearLoginFailures(user.employee.employeeCode);
   await writeAuditLog({ ...securityAuditFields(meta), action: "auth.unlocked_by_admin", entityType: "User", entityId: userId });
 }
 

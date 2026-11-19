@@ -99,7 +99,7 @@ same status and timing. The first-time hint moves to the login screen as static 
   argon2 verify (the real hash, or a dummy hash made once per process for a person with none) and is padded to at least 400 ms
   (`LOGIN_FAILURE_MIN_DURATION_MS`), so the small database writes a wrong password adds (the failed-attempt counter) do not show. A successful
   sign-in is not padded. The existing lockout (`423 LOCKED` after 5 wrong passwords) keeps its own reply: it was outside this request and is
-  unchanged; it does say that a number exists once someone has failed five times on it, which the owners may want to revisit.
+  unchanged; it does say that a number exists once someone has failed five times on it, which the owners may want to revisit. (Closed by follow-up 2.)
 - **Screen** (`frontend/src/pages/auth/login/LoginPage.tsx`): always-visible text under "Forgot password?": "First time, or forgot your password? Use
   Forgot password with your employee number." (design tokens only).
 - **Tests:** `employeeNumberLogin.test.ts` "an unknown number, a wrong password and an invited account are indistinguishable": same status (401),
@@ -113,6 +113,51 @@ same status and timing. The first-time hint moves to the login screen as static 
   auth/employee/settings/access/cleanup 214/214, frontend 141/141, build + bundle (login 232.5 KB / 250; employee home 347.8 / 400; admin home
   367.5 / 400).
 - **CI on the final code commit:** **run 429 on `8b4c5fb6`: green**, every job (read once).
+
+## Follow-up 2 (2026-11-19): no lockout or rate-limit reply names a number
+
+**Owner decision:** count failed sign-ins per employee number as typed (held or not) and per IP; past the limit, every such number gets one
+identical reply; no distinct 423, and no per-number or per-IP wording on the sign-in route.
+
+- **Server** (`backend/src/modules/auth/service.ts`):
+  - Every failed sign-in increments a counter for the number as typed (trimmed, case ignored, exactly as login matches it) and one for the IP, in
+    Redis. Unknown numbers, invited, suspended and deactivated accounts, and wrong passwords all count the same way.
+  - Limits: per number = the existing `auth.lockout` (5 failures; the lock lasts 15 minutes from the failure that reaches the limit, and failures
+    are counted within that window); per IP = the existing `auth.rateLimit.login` setting (10 failures in 15 minutes; it now counts failed
+    attempts only, so successful sign-ins are never counted or slowed).
+  - Past either limit, the check runs before any lookup, so the reply cannot depend on the number: `429 TOO_MANY_ATTEMPTS` "Too many attempts. Try
+    again later or ask HR to unlock your account." (`LOGIN_TOO_MANY_MESSAGE`), with the same dummy password check and 400 ms floor as every failure.
+  - The distinct `423 LOCKED` "Account is locked…" reply is gone. The route-level per-IP middleware ("Too many requests. Please try again later.")
+    no longer runs on `/api/auth/login`. The per-number 429 wording ("…for this employee number…") was only ever on Forgot password, and is
+    unchanged there: it is counted for every number typed, so it reveals nothing.
+  - A real account still records its lock (`failedLoginAttempts` = the number's count, `lockedUntil` set when it reaches the limit) and the audit
+    entries (`auth.login.failed`, `auth.login.lockout`), so HR's and directors' Access tab still shows **Locked out** and offers **Unlock**.
+  - Unlock: the automatic unlock is the counter expiring together with `lockedUntil`; HR/director unlock (`adminUnlock`, same permission rule as
+    before) clears both the record and the counter, audited `auth.unlocked_by_admin` as before. A successful sign-in clears the number's counter.
+  - If the Redis counter is lost while an account's recorded lock still runs, the account is still refused, with the same 429 reply.
+- **System Settings:** the per-IP sign-in limit is now labelled "Sign-in (failed attempts per address)".
+- **Tests** (`employeeNumberLogin.test.ts`):
+  - *Over the limit, a real (locked) number and a non-existent number get an identical reply.* Four cases: real with the right password, real with
+    a wrong one, unknown, unknown typed in lower case with spaces. All are 429 with an identical body; every sample is at or above the 400 ms
+    floor; the case averages are within 100 ms of each other (4 samples each, the tolerance used before). HR and a director see `locked: true`.
+  - *The per-IP limit gives the same reply*, for a real number with the right password and for an unknown one, and a successful sign-in afterwards
+    is not counted.
+  - *Unlock still works.* A director's unlock (audited) lets the right password in at once; the automatic unlock (counter expiry plus the recorded
+    lock passing) does too, and resets the count.
+- **Mutation checks** (each applied alone, then reverted; file compared byte for byte):
+  - *Locked case answered differently* (the old 423 `LOCKED` for a real locked account): 3 tests fail.
+  - *Locked case with the same body but answered at once* (no check, no padding): the identical-reply test fails on timing.
+- **Changed existing tests:**
+  - `login.test.ts` "locks the account after 5 failed attempts…" now expects 429 `TOO_MANY_ATTEMPTS` instead of 423 `LOCKED`.
+  - The golden test in `employeeNumberLogin.test.ts` expects the same.
+  - The golden test no longer clears every rate-limit key between its five failures, since that would now reset the per-number counter.
+  - **Reason:** owner decision of 2026-11-19.
+- **Results:** auth + access modules 130/130.
+
+- **Phase check (run once):** green: both lints, both typechecks, fresh database migrate + drift + seed, backend
+  auth/employee/settings/access/cleanup 217/217, frontend 141/141, build + bundle (login 232.5 KB / 250; employee home 347.8 / 400; admin home
+  367.5 / 400).
+- **CI on the final code commit:** FOLLOWUP2_CI
 
 ## Not verified / for the owners
 

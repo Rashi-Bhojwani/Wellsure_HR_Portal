@@ -64,6 +64,8 @@ describe("POST /api/auth/login", () => {
     expect(res.body.error.code).toBe("INVALID_CREDENTIALS");
   });
 
+  // Changed 2026-11-19 (docs/plans/LOGIN_REPORT.md, follow-up 2): the locked reply is the one over-limit reply (429 TOO_MANY_ATTEMPTS), the same as
+  // for a number nobody holds; it used to be a distinct 423 LOCKED. The account is still recorded as locked for HR's and directors' screens.
   it("locks the account after 5 failed attempts, and rejects even the correct password while locked", async () => {
     const user = await createTestUser(org);
     employeeIds.push(user.employeeId);
@@ -73,8 +75,8 @@ describe("POST /api/auth/login", () => {
     }
 
     const lockedRes = await request(app).post("/api/auth/login").send({ employeeCode: user.employeeCode, password: TEST_PASSWORD });
-    expect(lockedRes.status).toBe(423);
-    expect(lockedRes.body.error.code).toBe("LOCKED");
+    expect(lockedRes.status).toBe(429);
+    expect(lockedRes.body.error.code).toBe("TOO_MANY_ATTEMPTS");
 
     const dbUser = await prisma.user.findUnique({ where: { id: user.userId } });
     expect(dbUser?.lockedUntil).not.toBeNull();
