@@ -781,3 +781,20 @@ Verification:
   "Hidden" for every personal field, HR sees values; Schedules card "Default in use" / "Set". Keyboard: drawer opens with Enter, Esc closes, save works, 44 px on
   the phone, no sideways scroll.
 - Changed tests: `CHANGED_TESTS.md`, "Audit fixes (2026-11-18)".
+
+## Session A: the final merge (written 2026-11-19)
+
+Report: `docs/plans/FINAL_MERGE_REPORT.md`. Merges `09adb32` (login, no conflict), `e6cc128` (lateness, C1 schema end: both models kept), `6b0baf0` (theme, no
+conflict); `docs/ops-and-decisions` does not exist. Precondition met (`2b47c1e`: one 429 "Too many attempts" for locked and over-limit sign-ins).
+Post-merge fixes `258f6c9`: sign-in lifetimes as two-director settings with the cookie following the token row; leave.policy.manage removed from the Developer
+(migration, forbidden keys, 12 routes 403); the lateness queue follow-up proven with a real BullMQ worker; the Developer pinning test and lateness 403s pass.
+
+Verification:
+- Check script once: passed (25 backend files / 287 tests; frontend 19 / 144; lint, typecheck, tokens, fresh-database migrations). Build and bundle budgets: passed.
+- Full backend suite alone: 276 files / 2,417 tests passed.
+- Mutation checks: 6 of 6 caught.
+- Browser walk, keyboard only, 5 roles at 1280 light and 390 dark: 100 signed-in page loads plus the public screens, 0 crashes, 0 server errors, 0 sideways
+  scroll, no pay figure for HR, a manager or the Developer; the waiver drawer opens by Enter, Esc closes it and focus returns. Found, predates the merge, not
+  fixed: the Apply leave range picker keeps keyboard focus on "From".
+- Fixes for failures caused by the merge: none needed.
+- Changed tests: `CHANGED_TESTS.md`, "Final merge (2026-11-19)".

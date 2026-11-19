@@ -222,3 +222,11 @@ and expiry; the leave encashment amount (one value for year end, mid-year and ex
 personal data. Times and limits that had no screen are on System Settings, Schedules and limits. Rows 141 to 151 of `OWNER_REVIEW_SHEET.md`; plan and the list of
 what was not built in `docs/plans/AUDIT_FIXES.md`. Verification: `STAGE_REPORTS.md`, "Audit fixes".
 
+## 11. Final merge (written 2026-11-19)
+
+`feat/employee-number-login`, `feat/lateness-rule` and `feat/wellsure-theme` are merged into `feat/hr-payroll-separation` (one conflict, both models kept;
+`docs/ops-and-decisions` does not exist). Owner to know before go-live:
+- the Forgot-password link lifetime and how long a person stays signed in are Default behaviours, two directors, "Default in use" (60 minutes, 30 days) until
+  changed;
+- the Developer no longer manages leave policies.
+Open, not caused by the merge: on Apply leave, the keyboard cannot move past the "From" date box. Report: `docs/plans/FINAL_MERGE_REPORT.md`.
