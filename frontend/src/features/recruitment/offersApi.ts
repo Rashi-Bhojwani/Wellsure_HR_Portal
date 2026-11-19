@@ -44,7 +44,19 @@ export const revokeLink = (id: string) => data<{ id: string; revoked: boolean }>
 export const grantException = (candidateId: string, typeCode: string, reason: string) => data<Joining>(apiClient.post(`${root}/candidates/${candidateId}/joining-exceptions`, { typeCode, reason }));
 export const downloadJoiningDocument = (id: string) => apiClient.get<Blob>(`${root}/joining-documents/${id}/file`, { responseType: "blob" }).then((r) => r.data);
 export const prefill = (offerId: string) => data<Prefill>(apiClient.get(`${root}/offers/${offerId}/conversion`));
-export const convert = (offerId: string, input: Record<string, unknown>) => data<{ employeeId: string; employeeCode: string; created: boolean }>(apiClient.post(`${root}/offers/${offerId}/conversion`, input));
+/** The new employee's account after conversion: Invited (login ID = the employee number, no password), and what happened to its setup link. */
+export type ConversionResult = { employeeId: string; employeeCode: string; created: boolean; accountStatus: string | null; invitation: { status: "SENT" | "FILE_ONLY" | "FAILED" | "NOT_SENT"; error?: string } | null };
+export const convert = (offerId: string, input: Record<string, unknown>) => data<ConversionResult>(apiClient.post(`${root}/offers/${offerId}/conversion`, input));
+/** What the conversion screen says about the account and its setup link (the same words HR sees after Add Employee). */
+export function conversionMessage(r: ConversionResult): string {
+  const who = r.created ? `Employee ${r.employeeCode} created.` : `Already converted: ${r.employeeCode}.`;
+  if (r.accountStatus !== "INVITED" || !r.invitation) return r.accountStatus === "ACTIVE" ? `${who} Their account is active.` : who;
+  const link = r.invitation.status === "SENT" ? "The setup link was emailed to their personal address."
+    : r.invitation.status === "FILE_ONLY" ? "Nothing was emailed (development mode): the setup link was written to a file."
+    : r.invitation.status === "FAILED" ? `The setup link could not be sent${r.invitation.error ? ` (${r.invitation.error})` : ""}. Send it again from their profile.`
+    : "No setup link has been sent yet. Send it from their profile.";
+  return `${who} Account invited: they sign in with ${r.employeeCode}. ${link}`;
+}
 export const referralStatus = () => data<{ enabled: boolean; canReview: boolean }>(apiClient.get(root + "/referrals/status"));
 export const referralJobs = () => data<Array<{ id: string; title: string }>>(apiClient.get(root + "/referrals/jobs"));
 export const myReferrals = () => data<{ enabled: boolean; items: MyReferral[] }>(apiClient.get(root + "/referrals/mine"));

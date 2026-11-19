@@ -3,6 +3,9 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import request from "supertest";
 import pino from "pino";
+import { env } from "../../../config/env";
+import { mailService } from "../../../integrations/mail";
+import { GuardedMailService } from "../../../integrations/mail/guard";
 import { redis } from "../../../lib/redis";
 import { logger } from "../../../lib/logger";
 import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
@@ -288,6 +291,20 @@ describe("DEMO C-4B offers, pay, joining links, conversion and referrals", () =>
     expect(await prisma.employee.count()).toBe(before + 1);
     expect(await prisma.recruitmentConversion.count({ where: { candidateId } })).toBe(1);
     expect((await prisma.recruitmentApplication.findUniqueOrThrow({ where: { id: applicationId } })).status).toBe("HIRED");
+    // Final merge (login work): the same path as HR's Add Employee — Invited, the employee number as login ID, no password ever, one single-use setup
+    // link stored only as a hash and sent once (by the request that created the employee); the racing request and the retry report the state.
+    const user = await prisma.user.findUniqueOrThrow({ where: { employeeId: a.body.employeeId }, include: { invitationTokens: true } });
+    expect([user.status, user.passwordHash]).toEqual(["INVITED", null]);
+    expect(user.invitationTokens).toHaveLength(1);
+    expect(user.invitationTokens[0]!.tokenHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(user.invitationTokens[0]!.usedAt).toBeNull();
+    const winner = a.status === 201 ? a : b;
+    expect(winner.body).toMatchObject({ created: true, accountStatus: "INVITED", invitation: { status: "FILE_ONLY" } }); // the console mail driver in tests
+    const loser = a.status === 201 ? b : a; // it may read the state a moment before the winner has sent the link
+    expect(loser.body).toMatchObject({ created: false, accountStatus: "INVITED" });
+    expect(["FILE_ONLY", "NOT_SENT"]).toContain(loser.body.invitation.status);
+    expect(retry.body).toMatchObject({ created: false, accountStatus: "INVITED", invitation: { status: "FILE_ONLY" } });
+    for (const r of [a, b, retry]) expect(JSON.stringify(r.body)).not.toMatch(/password|set-password|token/i);
     const employee = await prisma.employee.findUniqueOrThrow({ where: { id: a.body.employeeId }, include: { jobHistory: true, nameHistory: true, bankAccounts: true, statutory: true } });
     expect([employee.employeeCode, employee.dateOfJoining.toISOString().slice(0, 10), employee.nameHistory[0]!.fullName, employee.jobHistory[0]!.departmentId]).toEqual([code, "2098-06-01", "DEMO Joiner Person", f.org.departmentId]);
     expect(employee.bankAccounts).toEqual([]);
@@ -299,6 +316,32 @@ describe("DEMO C-4B offers, pay, joining links, conversion and referrals", () =>
     const read = await readAcceptedOfferForPayroll(f.people.director.userId, a.body.employeeId);
     expect(read?.compensation).toEqual({ amount: PAY, period: "ANNUAL", currency: "INR" });
     expect(await prisma.auditLog.count({ where: { entityId: offerId, action: "recruitment.offer.compensation.opened", actorUserId: f.people.director.userId } })).toBeGreaterThan(0);
+  });
+
+  it("final merge: the converted employee's setup link goes through the mail guard (a refused address is reported, never delivered, never thrown)", async () => {
+    const { candidateId, offerId } = await acceptedOffer("DEMO Guarded Joiner");
+    for (const t of ["DEMO_ID", "DEMO_BANK"]) await f.call("second", "post", `/candidates/${candidateId}/joining-exceptions`, { typeCode: t, reason: "DEMO arrives later" });
+    const sent: string[] = [];
+    const transport = { send: async (m: { to: string }) => { sent.push(m.to); return { driver: "smtp" as const, delivered: true, to: m.to, detail: "recorded" }; } };
+    const guarded = new GuardedMailService(transport);
+    const original = mailService.send;
+    const appEnv = env as { APP_ENV: string; MAIL_ALLOWED_DOMAINS: string };
+    const saved = { APP_ENV: appEnv.APP_ENV, MAIL_ALLOWED_DOMAINS: appEnv.MAIL_ALLOWED_DOMAINS };
+    Object.assign(appEnv, { APP_ENV: "development", MAIL_ALLOWED_DOMAINS: "" });
+    mailService.send = (m) => guarded.send(m);
+    try {
+      const r = await f.call("hr", "post", `/offers/${offerId}/conversion`, conversionBody(`DEMOG${Date.now() % 1e7}`));
+      expect(r.status, JSON.stringify(r.body)).toBe(201);
+      converted.push(r.body.employeeId);
+      expect(r.body).toMatchObject({ created: true, accountStatus: "INVITED", invitation: { status: "FAILED" } });
+      expect(r.body.invitation.error).toMatch(/mail guard|MAIL_ALLOWED_DOMAINS|refused/i);
+      expect(sent).toEqual([]); // nothing reached the transport
+      const user = await prisma.user.findUniqueOrThrow({ where: { employeeId: r.body.employeeId }, include: { invitationTokens: true } });
+      expect([user.status, user.passwordHash, user.invitationTokens.length]).toEqual(["INVITED", null, 1]);
+    } finally {
+      mailService.send = original;
+      Object.assign(appEnv, saved);
+    }
   });
 
   it("stage 2: conversion copies each accepted joining document once into the restricted category, never pay", async () => {

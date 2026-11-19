@@ -5,6 +5,7 @@ import { writeAuditLogs } from "../../lib/audit";
 import { decryptField } from "../../lib/encryption";
 import { logger } from "../../lib/logger";
 import { HttpError } from "../../middleware/errorHandler";
+import { createInvitation, latestInvitationDelivery } from "../auth/service";
 import { createEmployeeInTx } from "../employee/service";
 import { createEmployeeSchema } from "../employee/validators";
 import { assertReportingLine } from "../managers/hierarchy";
@@ -62,8 +63,10 @@ export async function conversionPrefill(offerId: string, actor: Actor) {
 async function existing(offerId: string) {
   const row = await prisma.recruitmentConversion.findUnique({ where: { offerId } });
   if (!row) return null;
-  const employee = await prisma.employee.findUniqueOrThrow({ where: { id: row.employeeId }, select: { id: true, employeeCode: true } });
-  return { employeeId: employee.id, employeeCode: employee.employeeCode, created: false };
+  const employee = await prisma.employee.findUniqueOrThrow({ where: { id: row.employeeId }, select: { id: true, employeeCode: true, user: { select: { id: true, status: true } }, personal: { select: { personalEmail: true } } } });
+  // Final merge: the account and its setup link as HR's Add Employee shows them (a retry never sends a second link).
+  const invitation = employee.user?.status === "INVITED" ? await latestInvitationDelivery(employee.user.id, employee.personal?.personalEmail ?? "") : null;
+  return { employeeId: employee.id, employeeCode: employee.employeeCode, created: false, accountStatus: employee.user?.status ?? null, invitation };
 }
 
 async function joiningComplete(candidateId: string) {
@@ -101,7 +104,7 @@ export async function convert(offerId: string, actor: Actor, body: z.infer<typeo
   // Stage 2 (1.2): copy the joining documents into the restricted category before the transaction (storage cannot roll back);
   // the copies are discarded if this request does not create the employee. Never offer pay or expected pay.
   const copies = await prepareDocumentCopies(offer.candidateId);
-  let created: { employeeId: string; employeeCode: string; documentsCopied: number } | null = null;
+  let created: { employeeId: string; employeeCode: string; documentsCopied: number; userId: string } | null = null;
   try {
     created = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM recruitment_offers WHERE id=${offerId} FOR UPDATE`;
@@ -110,7 +113,7 @@ export async function convert(offerId: string, actor: Actor, body: z.infer<typeo
       const fresh = await tx.recruitmentOffer.findUniqueOrThrow({ where: { id: offerId } });
       if (fresh.state !== "ACCEPTED") throw new HttpError(409, "Only an accepted offer can be converted.", "CONFLICT");
       if (await tx.employee.findUnique({ where: { employeeCode: input.official.employeeCode } })) throw codeTaken(input.official.employeeCode);
-      const { employee } = await createEmployeeInTx(tx, input, meta);
+      const { employee, userId } = await createEmployeeInTx(tx, input, meta);
       await tx.recruitmentConversion.create({ data: { candidateId: fresh.candidateId, offerId, applicationId: fresh.applicationId, employeeId: employee.id, convertedByUserId: c.userId } });
       await tx.recruitmentApplication.update({ where: { id: fresh.applicationId }, data: { status: "HIRED", version: { increment: 1 }, changedByUserId: c.userId } });
       await tx.recruitmentJoinerLink.updateMany({ where: { candidateId: fresh.candidateId, revokedAt: null, completedAt: null }, data: { revokedAt: new Date(), revokedByUserId: c.userId } });
@@ -125,7 +128,7 @@ export async function convert(offerId: string, actor: Actor, body: z.infer<typeo
         { ...meta, action: "employee.created", entityType: "Employee", entityId: employee.id, after: { official: input.official, source: "RECRUITMENT_CONVERSION" } },
         { ...meta, action: "recruitment.candidate.converted", entityType: "RecruitmentOffer", entityId: offerId, after: { candidateId: fresh.candidateId, employeeId: employee.id } },
       ], tx);
-      return { employeeId: employee.id, employeeCode: input.official.employeeCode, documentsCopied };
+      return { employeeId: employee.id, employeeCode: input.official.employeeCode, documentsCopied, userId };
     }, { timeout: 30000 });
   } catch (error) {
     await discard(copies);
@@ -142,7 +145,12 @@ export async function convert(offerId: string, actor: Actor, body: z.infer<typeo
   if (input.official.attendanceCapture === "DEVICE" && input.official.deviceUserId) {
     await reResolveUnmapped(input.official.deviceUserId).catch((err: unknown) => logger.warn({ err, employeeId: created.employeeId }, "Could not attach earlier punches to the converted employee; map them from the Unmapped queue"));
   }
-  return { ...created, created: true };
+  // Final merge (login work): the same path as HR's Add Employee. The account is Invited with the employee number as its login ID and no password;
+  // the single-use setup link (stored hashed) goes out through the mail service and so through the mail guard (fake domains and demo employees
+  // never receive real mail). Only the request that created the employee sends it; a failed or refused send is returned, never thrown.
+  const { userId, ...result } = created;
+  const { delivery: invitation } = await createInvitation({ userId, email: input.personal.personalEmail, fullName: input.personal.fullName, employeeCode: input.official.employeeCode, actorUserId: meta.actorUserId });
+  return { ...result, created: true, accountStatus: "INVITED" as const, invitation };
 }
 
 const codeTaken = (code: string) => new HttpError(409, `Employee Code "${code}" is already in use. Choose another code.`, "EMPLOYEE_CODE_TAKEN");

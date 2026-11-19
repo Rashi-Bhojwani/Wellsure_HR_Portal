@@ -26,7 +26,7 @@ function Convert({ offerId, onClose }: { offerId: string; onClose: () => void })
   const designations = useQuery({ queryKey: ["recruitment", "designations"], queryFn: () => apiClient.get<Array<{ id: string; name: string }>>("/api/org/designations").then((r) => r.data) });
   const [form] = Form.useForm();
   const [key] = useState(() => crypto.randomUUID());
-  const work = useWork<{ employeeId: string; employeeCode: string; created: boolean }>((r) => { toast.success(r.created ? `Employee ${r.employeeCode} created.` : `Already converted: ${r.employeeCode}.`); onClose(); });
+  const work = useWork<offersApi.ConversionResult>((r) => { (r.invitation?.status === "FAILED" ? toast.warning : toast.success)(offersApi.conversionMessage(r)); onClose(); });
   const capture = Form.useWatch("attendanceCapture", form) as string | undefined;
   return (
     <SideDrawer open title="Convert to employee" size="wide" onClose={onClose} primaryLabel="Create employee" primaryLoading={work.isPending} onPrimary={() => form.submit()}>
