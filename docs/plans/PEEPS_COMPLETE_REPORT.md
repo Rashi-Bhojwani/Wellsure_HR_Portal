@@ -236,7 +236,7 @@ needed** (the Peeps screens use only tokens and Ant Design, so the theme reached
 - `check:popovers` (base seed, as CI) passes; `check:sensitive-ui`: no secret on any of **921 pages**, the DEMO banner on each.
 - Peeps demo-company confidentiality scan (`npm run test:peeps-demo`, which ran only locally before): **5 / 5** on the merged code.
 - Browser walk: §9 Theme, plus the joiner-link and conversion flow by keyboard.
-- CI on the final commit: §9 CI (below).
+- CI on the final commit: run 448, all 12 jobs green (§9 CI, below).
 
 Fixes for failures caused by the merge or by my fixes:
 1. `leaveTypes.test.ts` used a provider the main side removed → the new default (`7830167`).
@@ -244,6 +244,15 @@ Fixes for failures caused by the merge or by my fixes:
    toggle on; the merged code keeps the owners' Peeps rule ("personal email never shows"). The colleague assertion was changed, recorded in
    `CHANGED_TESTS.md` (`01480b5`). **Owners: please confirm which rule you want** (Peeps: never; the base toggle: allowed).
 3. Not caused by the merge, found by the walk: the Convert drawer crash (`7410807`).
+
+### CI
+
+- **CI run 448 on `272871c` (the final code commit): all 12 jobs green, each read to its last step.** install-lint-typecheck-test (lint,
+  typecheck, tokens and bundle budgets, migrate, schema matches migrations, seed, frontend and agent tests, demo company tests);
+  backend-tests shards 1–4 and backend-tests-complete (the shards add up to the suite, each test exactly once); sensitive-ui admin portal and
+  employee portal; latency (popovers at phone and desktop width, punch-to-screen by every route); attendance-replay; docker-build;
+  agent-windows.
+- Run 447 on the merge commit `7830167` failed before the fixes above and is superseded. This docs-only commit was not re-run through CI.
 
 ### Not verified
 
