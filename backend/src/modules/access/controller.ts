@@ -1,3 +1,4 @@
+import { HttpError } from "../../middleware/errorHandler";
 import * as directorChanges from "./directorChanges";
 import type { Request, Response } from "express";
 import * as service from "./service";
@@ -66,3 +67,20 @@ export async function setPortalAccess(req: Request, res: Response): Promise<void
   sendMaybePending(res, await service.setPortalAccess(emp(req), req.body.enabled, req.body.reason, actor(req), actorMeta(req)));
 }
 // A-9 — end
+
+// FIX-H2 (independent audit 2026-11-20): addresses blocked for failed sign-ins. A director or an HR Admin sees and clears them; each clearing is audited.
+const mayClearIpBlocks = (req: Request) => req.user!.roleCodes.includes("SUPER_ADMIN") || req.user!.roleCodes.includes("HR_ADMIN");
+export async function listLoginBlocks(req: Request, res: Response): Promise<void> {
+  if (!mayClearIpBlocks(req)) throw new HttpError(403, "Only a director or an HR Admin can see blocked sign-in addresses.", "FORBIDDEN");
+  const { listLoginIpBlocks, loginIpLimit } = await import("../auth/service");
+  res.json({ blocks: await listLoginIpBlocks(), limit: await loginIpLimit() });
+}
+export async function clearLoginBlock(req: Request, res: Response): Promise<void> {
+  if (!mayClearIpBlocks(req)) throw new HttpError(403, "Only a director or an HR Admin can clear a blocked sign-in address.", "FORBIDDEN");
+  const { clearLoginIpBlock } = await import("../auth/service");
+  const ip = String(req.params.ip);
+  const cleared = await clearLoginIpBlock(ip);
+  const { writeAuditLog } = await import("../../lib/audit");
+  await writeAuditLog({ ...actorMeta(req), action: "auth.ip_block.cleared", entityType: "LoginAddress", entityId: ip, after: { reason: (req.body as { reason?: string }).reason ?? null, cleared } });
+  res.json({ cleared });
+}

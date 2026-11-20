@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { authenticate } from "../../middleware/authenticate";
 import { HttpError } from "../../middleware/errorHandler";
@@ -44,6 +45,9 @@ accessRouter.post("/employees/:employeeId/roles", validate({ params: employeePar
 accessRouter.delete("/employees/:employeeId/roles/:code", validate({ params: employeeRoleParamsSchema }), controller.removeRole);
 // FIX-C2 (independent audit 2026-11-20): changes to who is a director wait here for the other director (checked in the service: directors only).
 accessRouter.get("/director-changes", controller.listDirectorChanges);
+// FIX-H2 (independent audit 2026-11-20): blocked sign-in addresses (a director or an HR Admin; checked in the controller). Developer refused.
+accessRouter.get("/login-blocks", refuseDeveloper, controller.listLoginBlocks);
+accessRouter.delete("/login-blocks/:ip", refuseDeveloper, validate({ params: z.object({ ip: z.string().min(1).max(64) }), body: reasonSchema }), controller.clearLoginBlock);
 accessRouter.post("/director-changes/:id/confirm", validate({ params: idParamsSchema }), controller.confirmDirectorChange);
 accessRouter.post("/director-changes/:id/reject", validate({ params: idParamsSchema, body: directorChangeRejectSchema }), controller.rejectDirectorChange);
 accessRouter.put("/employees/:employeeId/overrides/:key", validate({ params: employeeKeyParamsSchema, body: setOverrideSchema }), controller.setOverride);

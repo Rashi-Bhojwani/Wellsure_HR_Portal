@@ -157,7 +157,7 @@ async function recordFailedLogin(userId: string, meta: RequestMetaInput, failure
 // minutes, counted within that window); per IP = auth.rateLimit.login (default 10 failures in 15 minutes). The lock ends by itself when the counter
 // expires, or when HR or a director unlocks the account (adminUnlock clears the counter too).
 export const LOGIN_TOO_MANY_MESSAGE = "Too many attempts. Try again later or ask HR to unlock your account.";
-export const LOGIN_IP_LIMIT_DEFAULT = { maxAttempts: 10, windowSeconds: 900 };
+export const LOGIN_IP_LIMIT_DEFAULT = { maxAttempts: 100, windowSeconds: 900 }; // FIX-H2: was 10; the value in force is the Default behaviour auth.loginIpFailureLimit
 
 function loginNumberKey(raw: string): string {
   return `ratelimit:auth.loginFail.id:${normaliseLoginId(raw).toLowerCase()}`;
@@ -166,27 +166,65 @@ function loginIpKey(ip: string | null | undefined): string {
   return `ratelimit:auth.loginFail.ip:${ip ?? "unknown"}`;
 }
 
+// FIX-H2 (independent audit 2026-11-20): an office reaches the internet through one address, so ten typos at 9:30 locked the whole branch out. The per-address
+// limit is now the two-director Default behaviour "auth.loginIpFailureLimit" (default 100 failures in 15 minutes), and it never refuses a sign-in for a number
+// that has no recent failures of its own: failures for other numbers from the same address do not block a correct password. A number with failures of its
+// own, from an address over its limit, gets the same "Too many attempts" reply as before (the reply rules are unchanged).
+export async function loginIpLimit(): Promise<{ maxAttempts: number; windowSeconds: number }> {
+  return (await behaviourValue("auth.loginIpFailureLimit")).value;
+}
+function loginNumberIpsKey(raw: string): string {
+  return `ratelimit:auth.loginFail.ips:${normaliseLoginId(raw).toLowerCase()}`;
+}
+
 async function loginOverLimit(raw: string, ip: string | null | undefined): Promise<boolean> {
-  const [{ maxAttempts }, ipLimit] = await Promise.all([getLockoutConfig(), getSetting("auth.rateLimit.login", LOGIN_IP_LIMIT_DEFAULT)]);
+  const [{ maxAttempts }, ipLimit] = await Promise.all([getLockoutConfig(), loginIpLimit()]);
   const [forNumber, forIp] = await redis.mget(loginNumberKey(raw), loginIpKey(ip));
-  return Number(forNumber ?? 0) >= maxAttempts || Number(forIp ?? 0) >= ipLimit.maxAttempts;
+  const numberFailures = Number(forNumber ?? 0);
+  if (numberFailures >= maxAttempts) return true;
+  return Number(forIp ?? 0) >= ipLimit.maxAttempts && numberFailures > 0;
 }
 
 /** Counts one failed sign-in for the number typed and for the IP; returns the number's count. The same for every number, held or not. */
 async function loginFailureCount(raw: string, ip: string | null | undefined): Promise<number> {
-  const [{ maxAttempts, lockoutMinutes }, ipLimit] = await Promise.all([getLockoutConfig(), getSetting("auth.rateLimit.login", LOGIN_IP_LIMIT_DEFAULT)]);
+  const [{ maxAttempts, lockoutMinutes }, ipLimit] = await Promise.all([getLockoutConfig(), loginIpLimit()]);
   const numberKey = loginNumberKey(raw);
   const forNumber = await redis.incr(numberKey);
   // The window opens with the first failure; the failure that reaches the limit starts the lock period afresh, so the lock lasts lockoutMinutes.
   if (forNumber === 1 || forNumber === maxAttempts) await redis.expire(numberKey, lockoutMinutes * 60);
   const ipKey = loginIpKey(ip);
   if ((await redis.incr(ipKey)) === 1) await redis.expire(ipKey, ipLimit.windowSeconds);
+  // FIX-H2: which addresses this number failed from, so unlocking the account clears those address counters too.
+  const ipsKey = loginNumberIpsKey(raw);
+  await redis.sadd(ipsKey, ip ?? "unknown");
+  await redis.expire(ipsKey, Math.max(lockoutMinutes * 60, ipLimit.windowSeconds));
   return forNumber;
 }
 
-/** Clears the failed-sign-in counter for an employee number (HR or director unlock). */
+/** Clears the failed-sign-in counters for an employee number (HR or director unlock): the number's own, and those of the addresses it failed from. */
 export async function clearLoginFailures(employeeCode: string): Promise<void> {
-  await redis.del(loginNumberKey(employeeCode));
+  const ips = await redis.smembers(loginNumberIpsKey(employeeCode));
+  await redis.del(loginNumberKey(employeeCode), loginNumberIpsKey(employeeCode), ...ips.map((ip) => loginIpKey(ip)));
+}
+
+/** FIX-H2: the addresses currently over the limit, for the directors' and HR Admin's screen. */
+export async function listLoginIpBlocks(): Promise<Array<{ ip: string; failures: number; secondsLeft: number }>> {
+  const { maxAttempts } = await loginIpLimit();
+  const out: Array<{ ip: string; failures: number; secondsLeft: number }> = [];
+  let cursor = "0";
+  do {
+    const [next, keys] = await redis.scan(cursor, "MATCH", "ratelimit:auth.loginFail.ip:*", "COUNT", 200);
+    cursor = next;
+    for (const key of keys) {
+      const [count, ttl] = await Promise.all([redis.get(key), redis.ttl(key)]);
+      if (Number(count ?? 0) >= maxAttempts) out.push({ ip: key.slice("ratelimit:auth.loginFail.ip:".length), failures: Number(count), secondsLeft: Math.max(ttl, 0) });
+    }
+  } while (cursor !== "0");
+  return out.sort((a, b) => b.failures - a.failures);
+}
+
+export async function clearLoginIpBlock(ip: string): Promise<boolean> {
+  return (await redis.del(loginIpKey(ip))) > 0;
 }
 
 // The one reply every failed sign-in gets (owner decision 2026-11-18, docs/plans/LOGIN_REPORT.md): an unknown number, a wrong password and an

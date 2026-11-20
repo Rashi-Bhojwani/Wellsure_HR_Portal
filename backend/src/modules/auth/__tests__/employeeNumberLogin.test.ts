@@ -206,18 +206,34 @@ describe("employee-number login", () => {
       await clearRateLimits();
     });
 
-    it("the per-IP limit gives the same reply, for a real number with the right password and for an unknown one", async () => {
+    // FIX-H2 (independent audit 2026-11-20): the per-IP limit no longer refuses a correct password for a number with no failures of its own (it locked out a whole
+    // office). Over the limit, a number WITH its own failures (real, right password) and an unknown number still get the same reply. Limit set to 10 here (two
+    // made-up directors confirm it) so the test needs only ten failures; the default is 100.
+    it("the per-IP limit gives the same reply, for a real number (with failures of its own) with the right password and for an unknown one", async () => {
+      const setLimit = async (maxAttempts: number) => {
+        const pr = await prisma.behaviourProposal.create({ data: { key: "auth.loginIpFailureLimit", value: { maxAttempts, windowSeconds: 900 }, reason: "test", proposedByUserId: "test-director-a" } });
+        await prisma.behaviourConfirmation.create({ data: { proposalId: pr.id, confirmedByUserId: "test-director-b" } });
+      };
       const real = await person(`IP${uniq()}`);
       await clearRateLimits();
-      for (let i = 0; i < 10; i++) await login(`IPGHOST-${uniq()}`, "Wrong-Pass-1"); // ten different numbers: no number reaches its own limit
-      const a = await login(real.employeeCode, TEST_PASSWORD);
-      const b = await login(`IPGHOST-${uniq()}`, "Wrong-Pass-1");
-      expect([a.status, b.status]).toEqual([429, 429]);
-      expect(a.body).toEqual(b.body);
-      expect(a.body.error.message).toBe(LOGIN_TOO_MANY_MESSAGE);
-      expect(JSON.stringify(a.body)).not.toMatch(/employee number\.\.\.|this employee number/i);
-      await clearRateLimits();
-      expect((await login(real.employeeCode, TEST_PASSWORD)).status).toBe(200); // a successful sign-in is not counted or slowed
+      await setLimit(10);
+      try {
+        for (let i = 0; i < 10; i++) await login(`IPGHOST-${uniq()}`, "Wrong-Pass-1"); // ten different numbers: no number reaches its own limit
+        expect((await login(real.employeeCode, TEST_PASSWORD)).status).toBe(200); // no failures of its own: never blocked by the address
+        await login(real.employeeCode, "Wrong-Pass-1");
+        const ghost = `IPGHOST-${uniq()}`;
+        await login(ghost, "Wrong-Pass-1");
+        const a = await login(real.employeeCode, TEST_PASSWORD);
+        const b = await login(ghost, "Wrong-Pass-1");
+        expect([a.status, b.status]).toEqual([429, 429]);
+        expect(a.body).toEqual(b.body);
+        expect(a.body.error.message).toBe(LOGIN_TOO_MANY_MESSAGE);
+        expect(JSON.stringify(a.body)).not.toMatch(/employee number\.\.\.|this employee number/i);
+        await clearRateLimits();
+        expect((await login(real.employeeCode, TEST_PASSWORD)).status).toBe(200); // a successful sign-in is not counted or slowed
+      } finally {
+        await setLimit(100);
+      }
     });
 
     it("unlock still works: a director's unlock and the automatic unlock both let the right password in again", async () => {

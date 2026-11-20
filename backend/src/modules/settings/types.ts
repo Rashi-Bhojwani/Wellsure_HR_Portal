@@ -13,7 +13,7 @@ export const RATE_LIMIT_KEYS = ["login", "totpVerify", "inviteAccept", "forgotPa
 export type RateLimitKey = (typeof RATE_LIMIT_KEYS)[number];
 
 export const RATE_LIMIT_DEFAULTS: Record<RateLimitKey, RateLimitSetting> = {
-  login: { maxAttempts: 10, windowSeconds: 900 },
+  login: { maxAttempts: 100, windowSeconds: 900 }, // FIX-H2: shown from the Default behaviour auth.loginIpFailureLimit
   totpVerify: { maxAttempts: 10, windowSeconds: 900 },
   inviteAccept: { maxAttempts: 10, windowSeconds: 900 },
   forgotPassword: { maxAttempts: 5, windowSeconds: 3600 },
