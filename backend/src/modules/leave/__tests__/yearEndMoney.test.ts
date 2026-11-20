@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Prisma } from "@prisma/client";
@@ -41,7 +42,7 @@ describe("year-end encashment amounts are not HR's", () => {
   afterAll(async () => {
     setEncashmentRateProvider(new NotConfiguredEncashmentRateProvider());
     for (const id of runIds) await prisma.yearEndRun.deleteMany({ where: { id } });
-    await prisma.leaveLedger.deleteMany({ where: { employeeId: p.hr.employeeId } });
+    await purgeAppendOnly("LeaveLedger", { employeeId: p.hr.employeeId }); // FIX-H3: the ledger is append-only
     for (const k of Object.keys(p) as Array<keyof typeof p>) await cleanupFullTestEmployee(p[k].employeeId);
     await cleanupFullTestEmployee(hrAdmin.employeeId);
     await cleanupTestRole(dayOnlyRole);

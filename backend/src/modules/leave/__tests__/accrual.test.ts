@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { purgeAppendOnly } from "../../../lib/__tests__/cleanup";
 import { prisma } from "../../../lib/prisma";
 import { computeEligibilityDate, creditMonthlyAccrualForEmployee, firstAccrualMonth, isEligibleForAccrualMonth, runMonthlyPlAccrual } from "../accrual";
 import { cleanupMinimalTestEmployee, createMinimalTestEmployee, utcDate } from "./leaveTestHelpers";
@@ -158,7 +159,7 @@ describe("runMonthlyPlAccrual (bulk driver)", () => {
     while (employeeIds.length) await cleanupMinimalTestEmployee(employeeIds.pop()!);
     const rows = await prisma.leaveLedger.findMany({ where: { entryType: "ACCRUAL" }, select: { id: true } });
     const added = rows.map((r) => r.id).filter((id) => !preExistingAccrualIds.has(id));
-    await prisma.leaveLedger.deleteMany({ where: { id: { in: added } } });
+    await purgeAppendOnly("LeaveLedger", { id: { in: added } }); // FIX-H3: the ledger is append-only
   });
 
   it("credits a specific eligible fixture employee when run for their eligible month", async () => {

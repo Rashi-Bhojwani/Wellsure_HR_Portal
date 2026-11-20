@@ -141,7 +141,7 @@ describe("Manual Override (Phase 3 commit 2)", () => {
     await purgeAppendOnly("AuditLog", { entityId: { in: [...overrideIds, ...releaseIds, ...Object.values(requestIds)] } });
     await deleteWithDependents("LeaveDayRelease", releaseIds);
     await deleteWithDependents("AttendanceOverride", overrideIds);
-    await prisma.leaveLedger.deleteMany({ where: { employeeId: { in: ids } } });
+    await purgeAppendOnly("LeaveLedger", { employeeId: { in: ids } }); // FIX-H3: the ledger is append-only
     await prisma.compOffCredit.deleteMany({ where: { employeeId: { in: ids } } });
     await prisma.leaveRequest.deleteMany({ where: { employeeId: { in: ids } } });
     for (const x of Object.values(p)) await cleanupFullTestEmployee(x.employeeId);

@@ -22,7 +22,8 @@ function ident(name: string): string {
 }
 
 /** Tables the app role must be able to read and add to but never change: ones guarded by a TRUNCATE-blocking trigger, plus the two the spec names. */
-export const REQUIRED_APPEND_ONLY_TABLES = ["audit_logs", "security_events"] as const;
+// FIX-H3 (independent audit 2026-11-20): leave_ledger joins them. A balance is the sum of the ledger, so the app role never changes or removes a row.
+export const REQUIRED_APPEND_ONLY_TABLES = ["audit_logs", "security_events", "leave_ledger"] as const;
 
 /**
  * Tables with a truncate-blocking trigger whose rows legitimately change state, so the app role keeps UPDATE (never DELETE or TRUNCATE). The row's own
