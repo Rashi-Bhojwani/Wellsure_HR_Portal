@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { verifyAccessToken } from "../lib/jwt";
+import { verifyAccessTokenClaims } from "../lib/jwt";
 import { developerWriteRefused } from "../lib/developerFirewall";
 import { resolveAccess } from "../lib/permissions";
 import { prisma } from "../lib/prisma";
@@ -18,16 +18,20 @@ async function tryAuthenticate(req: Request): Promise<AuthenticatedUser | null> 
     return null;
   }
 
-  let userId: string;
+  let claims: { userId: string; sessionVersion: number };
   try {
-    userId = verifyAccessToken(header.slice("Bearer ".length));
+    claims = verifyAccessTokenClaims(header.slice("Bearer ".length));
   } catch {
     throw new HttpError(401, "Invalid or expired access token", "UNAUTHENTICATED");
   }
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, employeeId: true, status: true } });
+  const user = await prisma.user.findUnique({ where: { id: claims.userId }, select: { id: true, employeeId: true, status: true, sessionVersion: true } });
   if (!user || user.status !== "ACTIVE") {
     throw new HttpError(401, "Account is not active", "UNAUTHENTICATED");
+  }
+  // FIX-M1: a session from before a password reset or change (or a setup-link use, a two-step reset, signing out everywhere) is over.
+  if (claims.sessionVersion !== user.sessionVersion) {
+    throw new HttpError(401, "This session has ended. Sign in again.", "SESSION_ENDED");
   }
 
   // The one resolver (lib/permissions.ts): roles + overrides, SUPER_ADMIN

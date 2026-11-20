@@ -15,6 +15,7 @@ import { buildEmployeeScopeWhere, type DataScope } from "../../lib/dataScope";
 import { createInvitation, emailOnRecord, latestInvitationDelivery, recordNoEmailOnRecord, resendInvitation as resendInvitationEmail, type InvitationDelivery } from "../auth/service";
 import { loginIdTaken } from "../auth/loginId";
 import { requireDirector, requireDirectorTwoFactor } from "../../lib/directorAuthority";
+import { routePersonalUpdate } from "./contactChanges";
 import { assertReportingLine, assertReportingLineFor } from "../managers/hierarchy";
 import { emitPlacementRooms, emitTeamChanged } from "../../realtime/emit";
 import { notifyScheduledMove } from "./scheduledChanges";
@@ -828,21 +829,27 @@ interface PersonalUpdateInput {
   emergencyContactRelation?: string;
 }
 
-async function updatePersonalFields(employeeId: string, input: PersonalUpdateInput, meta: RequestMetaInput, action: string): Promise<void> {
+// FIX-C1 (independent audit 2026-11-20): a sign-in email change and any change to a director's record are held for a director's confirmation
+// (contactChanges.ts); only what may be written now is written. Returns the held request's id, or null.
+async function updatePersonalFields(employeeId: string, input: PersonalUpdateInput, meta: RequestMetaInput, action: string, source: string): Promise<string | null> {
   const before = await prisma.employeePersonal.findUnique({ where: { employeeId } });
   if (!before) throw new HttpError(404, "Employee not found.", "NOT_FOUND");
-  const after = await prisma.employeePersonal.update({ where: { employeeId }, data: input });
-  await writeAuditLog({ ...meta, action, entityType: "Employee", entityId: employeeId, before, after });
+  const { direct, pendingId } = await routePersonalUpdate(employeeId, input, meta, source);
+  if (Object.keys(direct).length > 0) {
+    const after = await prisma.employeePersonal.update({ where: { employeeId }, data: direct as Prisma.EmployeePersonalUpdateInput });
+    await writeAuditLog({ ...meta, action, entityType: "Employee", entityId: employeeId, before, after });
+  }
+  return pendingId;
 }
 
-// HR direct edit — any personal field.
-export async function updatePersonal(employeeId: string, input: PersonalUpdateInput, meta: RequestMetaInput): Promise<void> {
-  await updatePersonalFields(employeeId, input, meta, "employee.personal.updated");
+// HR direct edit — any personal field (a sign-in email change and a director's record wait for a director).
+export async function updatePersonal(employeeId: string, input: PersonalUpdateInput, meta: RequestMetaInput): Promise<string | null> {
+  return updatePersonalFields(employeeId, input, meta, "employee.personal.updated", "HR_EDIT");
 }
 
 // Employee self-service — address/emergency-contact/photo only (schema's
 // EmployeePersonal comment); the caller's own record, resolved server-side
 // from the JWT, never from a client-supplied id.
-export async function updateSelfService(requestingEmployeeId: string, input: PersonalUpdateInput, meta: RequestMetaInput): Promise<void> {
-  await updatePersonalFields(requestingEmployeeId, input, meta, "employee.self_service.updated");
+export async function updateSelfService(requestingEmployeeId: string, input: PersonalUpdateInput, meta: RequestMetaInput): Promise<string | null> {
+  return updatePersonalFields(requestingEmployeeId, input, meta, "employee.self_service.updated", "SELF_SERVICE");
 }

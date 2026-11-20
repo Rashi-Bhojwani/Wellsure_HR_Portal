@@ -177,7 +177,12 @@ export async function approveChangeRequest(id: string, remarks: string | undefin
   }
   if (row.fieldGroup === "bank") await applyBankChange(row.employeeId, changesJson, meta);
   else if (row.fieldGroup === "statutory") await applyStatutoryChange(row.employeeId, changesJson, meta.actorUserId);
-  else await applyPersonalChange(row.employeeId, changesJson);
+  else {
+    // FIX-C1 (independent audit 2026-11-20): approving someone's own request still never changes a sign-in email or a director's record directly.
+    const { routePersonalUpdate } = await import("./contactChanges");
+    const { direct } = await routePersonalUpdate(row.employeeId, changesJson as never, meta, "CHANGE_REQUEST", { requestedBySelf: true });
+    if (Object.keys(direct).length) await applyPersonalChange(row.employeeId, direct);
+  }
 
   await prisma.profileChangeRequest.update({
     where: { id },

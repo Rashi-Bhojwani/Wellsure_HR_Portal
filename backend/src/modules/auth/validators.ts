@@ -42,3 +42,6 @@ export const totpDisableSchema = z.object({
   password: z.string().min(1),
   code: z.string().min(1),
 });
+
+// FIX-M1 (independent audit 2026-11-20): an authenticated password change.
+export const changePasswordSchema = z.object({ currentPassword: z.string().min(1).max(200), newPassword: passwordSchema }).strict();

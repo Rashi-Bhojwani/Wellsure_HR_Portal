@@ -3,6 +3,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { requireAnyPermission, requirePermission } from "../../middleware/rbac";
 import { z } from "zod";
 import { validate } from "../../middleware/validate";
+import { refuseDeveloper } from "../../middleware/refuseDeveloper";
 import * as controller from "./controller";
 import { memoryUpload } from "../../lib/uploads";
 import { MAX_PHOTO_UPLOAD_MB_CEILING } from "@shared/constants/peopleDocuments";
@@ -27,8 +28,7 @@ import {
   personalUpdateSchema,
   savedViewCreateSchema,
   selfServiceUpdateSchema,
-  statutoryUpdateSchema,
-} from "./validators";
+  statutoryUpdateSchema, contactChangeRejectSchema } from "./validators";
 
 const historyRowParamsSchema = z.object({ id: z.string().min(1), rowId: z.string().min(1) });
 
@@ -72,6 +72,11 @@ employeeRouter.patch("/me", validate({ body: selfServiceUpdateSchema }), control
 employeeRouter.put("/me/photo", photoUpload, controller.uploadMyPhoto);
 employeeRouter.delete("/me/photo", controller.removeMyPhoto);
 
+// FIX-C1 (independent audit 2026-11-20): held sign-in email and director-record changes. Listing: a director sees all, anyone else the ones they made (no values,
+// only which fields). Confirming: a director who is neither the proposer nor the person (checked in contactChanges.ts). Developer refused.
+employeeRouter.get("/contact-changes", refuseDeveloper, controller.listContactChanges);
+employeeRouter.post("/contact-changes/:id/confirm", refuseDeveloper, validate({ params: idParamsSchema }), controller.confirmContactChange);
+employeeRouter.post("/contact-changes/:id/reject", refuseDeveloper, validate({ params: idParamsSchema, body: contactChangeRejectSchema }), controller.rejectContactChange);
 employeeRouter.post("/change-requests", validate({ body: createChangeRequestSchema }), controller.createChangeRequest);
 employeeRouter.get("/change-requests", controller.listChangeRequests);
 employeeRouter.post(

@@ -169,3 +169,11 @@ export async function regenerateBackupCodes(req: Request, res: Response): Promis
   const backupCodes = await authService.regenerateBackupCodes(req.user!.userId);
   res.status(200).json({ backupCodes });
 }
+
+// FIX-M1 (independent audit 2026-11-20): change your own password while signed in. Every other session ends at once; this device gets a fresh session.
+export async function changePassword(req: Request, res: Response): Promise<void> {
+  const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };
+  const result = await authService.changePassword(req.user!.userId, currentPassword, newPassword, requestMeta(req));
+  setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
+  res.status(200).json({ accessToken: result.accessToken });
+}

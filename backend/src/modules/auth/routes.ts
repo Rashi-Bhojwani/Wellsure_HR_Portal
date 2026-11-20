@@ -14,6 +14,7 @@ import {
   revokeSessionParamsSchema,
   totpDisableSchema,
   totpVerifySchema,
+  changePasswordSchema,
 } from "./validators";
 
 // Defaults used when the corresponding SystemSetting row hasn't been
@@ -63,6 +64,8 @@ authRouter.post(
 );
 
 authRouter.get("/me", authenticate, controller.me);
+// FIX-M1 (independent audit 2026-11-20): change your own password; every other session ends. Rate-limited like a reset (a wrong current password counts).
+authRouter.post("/password", authenticate, rateLimit("auth.rateLimit.resetPassword", RESET_PASSWORD_RATE_LIMIT), validate({ body: changePasswordSchema }), controller.changePassword);
 authRouter.post("/privacy-notice/accept", authenticate, controller.acceptPrivacyNotice);
 
 authRouter.post("/2fa/setup", optionalAuthenticate, controller.setupTotp);

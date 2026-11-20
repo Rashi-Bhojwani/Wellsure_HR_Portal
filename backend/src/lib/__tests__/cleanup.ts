@@ -134,6 +134,7 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   Role: "shared role catalog; cleanupTestRole",
   PayrollReportLayout: "Stage 6: a saved payroll report layout (no FK; append-only); deleteWithDependents(\"PayrollReportLayout\", ids)",
   PayrollParallelComparison: "Stage 8: a saved parallel-run comparison (no FK; a director may delete it); deleteWithDependents(\"PayrollParallelComparison\", ids)",
+  ContactChangeRequest: "FIX-C1: a held sign-in email or director record change (employee id kept without an FK; decided once, never deleted); deleteWithDependents(\"ContactChangeRequest\", ids)",
   DirectorRoleChange: "FIX-C2: a proposed director role change (no FK; decided once, never deleted); deleteWithDependents(\"DirectorRoleChange\", ids)",
   LeaveChangeRequest: "FIX-C3: a proposed leave grant, comp-off credit or leave import waiting for a director (no FK; decided once, never deleted); deleteWithDependents(\"LeaveChangeRequest\", ids)",
   BehaviourProposal: "D-37: a behaviour setting proposal (no FK; append-only); deleteWithDependents(\"BehaviourProposal\", ids) also removes its confirmation",
@@ -441,7 +442,9 @@ const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "Atte
   // FIX-C3: decided once, never deleted outside the test purge.
   "LeaveChangeRequest",
   // FIX-C2: decided once, never deleted outside the test purge; a fixture's Super Admin role row goes through the purge too (user_roles trigger).
-  "DirectorRoleChange", "UserRole"]);
+  "DirectorRoleChange", "UserRole",
+  // FIX-C1: decided once, never deleted outside the test purge.
+  "ContactChangeRequest"]);
 
 // PEEPS-BEGIN assets
 for (const m of ["Asset", "AssetAssignment", "AssetEvent", "AssetSettingVersion", "AssetSettingConfirmation"]) PURGE_GUARDED_MODELS.add(m);
@@ -566,6 +569,13 @@ export async function deleteEmployeesAndDependents(employeeIds: string[]): Promi
   const users = await prisma.user.findMany({ where: { employeeId: { in: employeeIds } }, select: { id: true } });
   const ids = [...employeeIds, ...users.map((u) => u.id)];
   await purgeAppendOnly("AuditLog", { OR: [{ entityId: { in: ids } }, { actorUserId: { in: users.map((u) => u.id) } }] });
+  // FIX-C1/C2/C3: the held-change records name a fixture by plain id (no FK), so they are removed here with it, through the test purge.
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe("SELECT set_config('app.audit_purge', 'test', true)");
+    await tx.contactChangeRequest.deleteMany({ where: { employeeId: { in: employeeIds } } });
+    await tx.directorRoleChange.deleteMany({ where: { OR: [{ targetUserId: { in: users.map((u) => u.id) } }, { proposedByUserId: { in: users.map((u) => u.id) } }] } });
+    await tx.leaveChangeRequest.deleteMany({ where: { OR: [{ targetEmployeeIds: { hasSome: employeeIds } }, { proposedByUserId: { in: users.map((u) => u.id) } }] } });
+  });
   await deleteWithDependents("Employee", employeeIds);
 }
 // PEEPS-BEGIN recruitment

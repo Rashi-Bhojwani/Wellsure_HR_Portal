@@ -49,6 +49,9 @@ export async function getSettings(): Promise<SecuritySettings> {
   ]);
 
   const rateLimits = Object.fromEntries(RATE_LIMIT_KEYS.map((k, i) => [k, rateLimitValues[i]!])) as SecuritySettings["rateLimits"];
+  // FIX-H2 (independent audit 2026-11-20): the per-address sign-in limit is the two-director Default behaviour "auth.loginIpFailureLimit" (default 100 in 15 minutes).
+  const { behaviourValue } = await import("../behaviours/service");
+  rateLimits.login = (await behaviourValue("auth.loginIpFailureLimit")).value;
 
   return {
     lockoutMaxAttempts: lockout.maxAttempts,
@@ -87,9 +90,13 @@ export async function updateSettings(input: UpdateInput, meta: { actorUserId: st
     await setSetting("auth.require2faRoles", input.require2faRoles, meta.actorUserId);
   }
   if (input.requireDirectorTwoFactor !== undefined && input.requireDirectorTwoFactor !== before.requireDirectorTwoFactor) {
-    // Only a director may turn this on or off (a person who holds settings.manage but is not a director cannot weaken or tighten the directors' own sign-in).
+    // FIX-C1 (independent audit 2026-11-20): compulsory by default, and changed only by one director proposing and the other confirming (Default behaviours,
+    // "Two-step sign-in is compulsory for the directors"). This one-director path no longer changes it.
     if (!(await isDirector(meta.actorUserId))) throw new HttpError(403, "Only a director can change whether two-step sign-in is required of directors.", "DIRECTOR_ONLY");
-    await setSetting(DIRECTOR_2FA_SETTING_KEY, input.requireDirectorTwoFactor, meta.actorUserId);
+    throw new HttpError(409, "Two-step sign-in for directors is changed in Default behaviours: one director proposes, the other confirms.", "USE_DEFAULT_BEHAVIOURS");
+  }
+  if (input.rateLimits?.login) {
+    throw new HttpError(409, "The sign-in limit per address is changed in Default behaviours: one director proposes, the other confirms.", "USE_DEFAULT_BEHAVIOURS");
   }
   if (input.rateLimits) {
     for (const key of RATE_LIMIT_KEYS) {

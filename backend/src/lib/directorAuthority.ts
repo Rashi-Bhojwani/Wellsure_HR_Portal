@@ -40,9 +40,11 @@ export async function requireDirector(userId: string, what: string, db: Db = pri
  */
 export const DIRECTOR_2FA_SETTING_KEY = "auth.requireDirectorTwoFactor";
 
-export async function directorTwoFactorRequired(db: Db = prisma): Promise<boolean> {
-  const row = await db.systemSetting.findUnique({ where: { key: DIRECTOR_2FA_SETTING_KEY } });
-  return row?.value === true;
+// FIX-C1 (independent audit 2026-11-20): compulsory by default. The Default behaviour "auth.directorTwoFactorCompulsory" (on unless both directors confirmed
+// turning it off) decides; the old one-director System Setting (DIRECTOR_2FA_SETTING_KEY) is no longer read.
+export async function directorTwoFactorRequired(_db: Db = prisma): Promise<boolean> {
+  const { behaviourValue } = await import("../modules/behaviours/service");
+  return (await behaviourValue("auth.directorTwoFactorCompulsory")).value === true;
 }
 
 /** `enforced` overrides the setting (tests of the enforced mode); omitted, the setting decides. */

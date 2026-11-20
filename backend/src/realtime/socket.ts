@@ -2,7 +2,7 @@ import type { Server as HttpServer } from "node:http";
 import { Server as SocketIOServer } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { env } from "../config/env";
-import { verifyAccessToken } from "../lib/jwt";
+import { verifyAccessTokenClaims } from "../lib/jwt";
 import { logger } from "../lib/logger";
 import { prisma } from "../lib/prisma";
 import { redis } from "../lib/redis";
@@ -34,11 +34,12 @@ export interface SocketAuthData {
 // function is where the actual auth decision (valid token? active
 // account? which rooms?) is made.
 export async function authenticateSocketToken(token: string): Promise<SocketAuthData> {
-  const userId = verifyAccessToken(token);
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, employeeId: true, status: true } });
+  const claims = verifyAccessTokenClaims(token);
+  const user = await prisma.user.findUnique({ where: { id: claims.userId }, select: { id: true, employeeId: true, status: true, sessionVersion: true } });
   if (!user || user.status !== "ACTIVE") {
     throw new Error("Account is not active");
   }
+  if (claims.sessionVersion !== user.sessionVersion) throw new Error("This session has ended"); // FIX-M1
   const access = await resolveAccess(user.id);
   const jobHistory = await prisma.employeeJobHistory.findFirst({
     where: { employeeId: user.employeeId, ...inForceOn() },

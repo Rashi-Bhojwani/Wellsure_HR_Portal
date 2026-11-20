@@ -1,3 +1,4 @@
+import * as contactChanges from "./contactChanges";
 import { cancelScheduled } from "./scheduledChanges";
 import * as photos from "../people/photos";
 import { requireFile } from "../../lib/uploads";
@@ -150,6 +151,7 @@ export async function updateJob(req: Request, res: Response): Promise<void> {
 // M task 1: an entry that must wait for a director is held (202, masked) instead of written; otherwise it is written at once, as before.
 export async function updateBank(req: Request, res: Response): Promise<void> {
   const id = req.params.id as string;
+  await contactChanges.refuseOthersOnDirectorIdentity(id, req.user!.userId); // FIX-C1
   const reason = await identity.holdReasonFor(req.user!.userId, id);
   if (reason) {
     await employeeService.findScopedEmployee(id, req.user!.employeeId, scope(req));
@@ -160,10 +162,17 @@ export async function updateBank(req: Request, res: Response): Promise<void> {
   res.status(200).json(await employeeService.updateBank(id, req.body, actorMeta(req)));
 }
 export async function updateName(req: Request, res: Response): Promise<void> {
+  // FIX-C1: a director's name is changed only by that director, and the other director confirms it.
+  const held = await contactChanges.routeDirectorName(req.params.id as string, req.body, actorMeta(req));
+  if (held) {
+    res.status(202).json({ pendingConfirmation: true, id: held });
+    return;
+  }
   res.status(200).json(await employeeService.updateName(req.params.id as string, req.body, actorMeta(req)));
 }
 export async function updateStatutory(req: Request, res: Response): Promise<void> {
   const id = req.params.id as string;
+  await contactChanges.refuseOthersOnDirectorIdentity(id, req.user!.userId); // FIX-C1
   const reason = await identity.holdReasonFor(req.user!.userId, id);
   if (reason) {
     await employeeService.findScopedEmployee(id, req.user!.employeeId, scope(req));
@@ -188,13 +197,22 @@ export async function rejectIdentityChange(req: Request, res: Response): Promise
 export async function withdrawIdentityChange(req: Request, res: Response): Promise<void> {
   res.status(200).json(await identity.withdraw(req.params.id as string, actorMeta(req)));
 }
+// FIX-C1: a held change answers 202 with its id; everything written at once answers 204 as before.
+const heldOr204 = (res: Response, pendingId: string | null) => (pendingId ? res.status(202).json({ pendingConfirmation: true, id: pendingId }) : res.status(204).send());
 export async function updatePersonal(req: Request, res: Response): Promise<void> {
-  await employeeService.updatePersonal(req.params.id as string, req.body, actorMeta(req));
-  res.status(204).send();
+  heldOr204(res, await employeeService.updatePersonal(req.params.id as string, req.body, actorMeta(req)));
 }
 export async function updateSelfService(req: Request, res: Response): Promise<void> {
-  await employeeService.updateSelfService(req.user!.employeeId, req.body, actorMeta(req));
-  res.status(204).send();
+  heldOr204(res, await employeeService.updateSelfService(req.user!.employeeId, req.body, actorMeta(req)));
+}
+export async function listContactChanges(req: Request, res: Response): Promise<void> {
+  res.json(await contactChanges.listContactChanges(req.user!.userId));
+}
+export async function confirmContactChange(req: Request, res: Response): Promise<void> {
+  res.json(await contactChanges.confirmContactChange(req.params.id as string, req.user!.userId, actorMeta(req)));
+}
+export async function rejectContactChange(req: Request, res: Response): Promise<void> {
+  res.json(await contactChanges.rejectContactChange(req.params.id as string, String(req.body.note), req.user!.userId, actorMeta(req)));
 }
 
 // ── Change requests ──────────────────────────────────────────────────────

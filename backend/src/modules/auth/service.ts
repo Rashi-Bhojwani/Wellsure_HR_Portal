@@ -106,8 +106,8 @@ async function completeLogin(
   roleCodes: string[],
   meta: RequestMetaInput,
 ): Promise<LoginTokens> {
-  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-  const accessToken = signAccessToken(user.id);
+  const fresh = await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() }, select: { sessionVersion: true } });
+  const accessToken = signAccessToken(user.id, fresh.sessionVersion);
   const { token: refreshToken, row: refreshRow } = await issueRefreshToken(user.id, meta);
   await writeAuditLog({
     actorUserId: user.id,
@@ -355,7 +355,7 @@ export async function refresh(
     throw new HttpError(401, "Session refresh in progress elsewhere. Please retry.", "REFRESH_RACE_LOST");
   }
   const { token: newRefreshToken, row: newRow } = rotated;
-  const accessToken = signAccessToken(user.id);
+  const accessToken = signAccessToken(user.id, user.sessionVersion);
   await writeAuditLog({
     actorUserId: user.id,
     action: "auth.refresh.rotated",
@@ -545,6 +545,8 @@ export async function acceptInvitation(
   if (!user) {
     throw new HttpError(400, "This invitation link is invalid or has expired.", "INVALID_INVITATION");
   }
+  // FIX-C1 (independent audit 2026-11-20): using a setup link ends every other session of the account (none should exist; if one does, it is not this person's).
+  await revokeAllUserRefreshTokens(user.id);
 
   const employee = await prisma.employee.findFirst({
     where: { user: { id: user.id } },
@@ -692,6 +694,25 @@ export async function forgotPassword(employeeCode: string, meta: RequestMetaInpu
       await new Promise((resolve) => setTimeout(resolve, FORGOT_PASSWORD_MIN_DURATION_MS - elapsed));
     }
   }
+}
+
+// FIX-M1 (independent audit 2026-11-20): an authenticated change of one's own password. The current password is checked (argon2), the new one meets the
+// policy, every session ends (refresh tokens revoked, session version raised: every access token already issued stops at once), and this device gets a new pair.
+export async function changePassword(userId: string, currentPassword: string, newPassword: string, meta: RequestMetaInput): Promise<{ accessToken: string; refreshToken: string; refreshExpiresAt: Date }> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || user.status !== "ACTIVE" || !user.passwordHash) throw new HttpError(401, "Not signed in.", "UNAUTHENTICATED");
+  if (!(await argon2.verify(user.passwordHash, currentPassword))) {
+    await writeAuditLog({ actorUserId: userId, action: "auth.password.change_failed", entityType: "User", entityId: userId, ipAddress: meta.ipAddress, userAgent: meta.userAgent });
+    throw new HttpError(400, "Your current password is not correct.", "WRONG_PASSWORD");
+  }
+  await assertPasswordMeetsPolicy(newPassword);
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash: await argon2.hash(newPassword) } });
+  await prisma.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
+  await revokeAllUserRefreshTokens(userId);
+  const fresh = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { sessionVersion: true } });
+  const { token: refreshToken, row } = await issueRefreshToken(userId, meta);
+  await writeAuditLog({ actorUserId: userId, action: "auth.password.changed", entityType: "User", entityId: userId, ipAddress: meta.ipAddress, userAgent: meta.userAgent });
+  return { accessToken: signAccessToken(userId, fresh.sessionVersion), refreshToken, refreshExpiresAt: row.expiresAt };
 }
 
 export async function resetPassword(token: string, password: string, meta: RequestMetaInput): Promise<void> {

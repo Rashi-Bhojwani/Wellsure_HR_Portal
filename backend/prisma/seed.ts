@@ -1000,6 +1000,11 @@ async function main() {
       const p = await prisma.behaviourProposal.create({ data: { key, value: typeId, reason: "Development data: the seeded leave types", proposedByUserId: d1.id } });
       await prisma.behaviourConfirmation.create({ data: { proposalId: p.id, confirmedByUserId: d2.id } });
     }
+    // FIX-C1 (independent audit 2026-11-20): two-step sign-in is compulsory for directors by default. A laptop has no authenticator app, so the development
+    // data records both seeded directors turning it off, the way the screens would (one proposes, the other confirms). Staging and production are never seeded:
+    // there it stays on until both real directors confirm otherwise.
+    const off = await prisma.behaviourProposal.create({ data: { key: "auth.directorTwoFactorCompulsory", value: false, reason: "Development data: no authenticator app on a laptop", proposedByUserId: d1.id } });
+    await prisma.behaviourConfirmation.create({ data: { proposalId: off.id, confirmedByUserId: d2.id } });
   }
 
   console.log(`Seeded ${n} employees across ${locations.length} branches in 2 cities.`);

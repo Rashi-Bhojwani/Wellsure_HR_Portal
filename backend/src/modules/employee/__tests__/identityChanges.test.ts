@@ -136,10 +136,12 @@ describe("HR's bank and statutory changes wait for a director", () => {
     const row = await prisma.identityChangeRequest.findUniqueOrThrow({ where: { id: res.body.id } });
     expect(row.source).toBe("DIRECTOR_EDIT");
     expect((await as("d1").post(`/api/employees/identity-changes/${row.id}/confirm`)).body.error.code).toBe("CHECKER_IS_MAKER");
-    // Nor is a director asked to confirm a change to their own record entered by HR.
+    // FIX-C1 (independent audit 2026-11-20): HR can no longer enter a director's identity details at all; only that director, confirmed by the other.
     const hrForD2 = await as("hrAdmin").patch(`/api/employees/${u.d2!.employeeId}/statutory`, { uan: "999900002222" });
-    expect((await as("d2").post(`/api/employees/identity-changes/${hrForD2.body.id}/confirm`)).body.error.code).toBe("OWN_RECORD");
-    expect((await as("d1").post(`/api/employees/identity-changes/${hrForD2.body.id}/confirm`)).status).toBe(200);
+    expect([hrForD2.status, hrForD2.body.error.code]).toEqual([403, "DIRECTOR_RECORD_SELF_ONLY"]);
+    const d2Own = await as("d2").patch(`/api/employees/${u.d2!.employeeId}/statutory`, { uan: "999900002222" });
+    expect((await as("d2").post(`/api/employees/identity-changes/${d2Own.body.id}/confirm`)).body.error.code).toBe("CHECKER_IS_MAKER");
+    expect((await as("d1").post(`/api/employees/identity-changes/${d2Own.body.id}/confirm`)).status).toBe(200);
     expect((await as("d2").post(`/api/employees/identity-changes/${row.id}/confirm`)).status).toBe(200);
     expect((await openBank(u.d1!.employeeId))?.accountNumberLast4).toBe("1357");
   });

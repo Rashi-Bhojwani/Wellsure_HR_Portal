@@ -232,6 +232,47 @@ export const BEHAVIOURS = {
     defaultInUse: true,
     defaultText: "30 days",
   },
+  // FIX (independent audit 2026-11-20). Each is changed only by one director proposing and the other confirming, like every behaviour here.
+  "auth.directorTwoFactorCompulsory": {
+    title: "Two-step sign-in is compulsory for the directors",
+    what: "When on, a director must set up two-step sign-in (an authenticator app) at their next sign-in and cannot sign in, act on payroll or confirm anything without it. Turning it off needs the other director's confirmation.",
+    schema: z.boolean(),
+    defaultValue: true as boolean,
+    d37: true,
+    defaultText: "On: both directors must use two-step sign-in",
+  },
+  "auth.loginEmailChangeNeedsDirector": {
+    title: "A change to someone's sign-in email waits for a director",
+    what: "When on, a change to the personal email that receives sign-in and password-reset links takes effect only when a director (not the person who made it) confirms it. HR's changes always wait. A director's own email always waits for the other director. The old address is told either way.",
+    schema: z.boolean(),
+    defaultValue: true as boolean,
+    d37: true,
+    defaultText: "On: a director confirms every change to a sign-in email",
+  },
+  "auth.loginIpFailureLimit": {
+    title: "Failed sign-ins from one address before it is slowed down",
+    what: "How many failed sign-ins from one internet address (an office shares one) within the window before further attempts from it are refused. A correct password for a number with no failures of its own is never refused because of this count.",
+    schema: z.object({ maxAttempts: z.number().int().min(10).max(10000), windowSeconds: z.number().int().min(60).max(86400) }).strict(), // allow-number: attempts and seconds
+    defaultValue: { maxAttempts: 100, windowSeconds: 900 } as { maxAttempts: number; windowSeconds: number },
+    d37: true,
+    defaultText: "100 failed sign-ins in 15 minutes",
+  },
+  "lateness.waiverNeedsDirector": {
+    title: "Lateness waivers need a director's confirmation",
+    what: "When on, a lateness waiver HR approves (it cancels a pay cut) takes effect only when a director confirms it. Only matters once the lateness rule is switched on.",
+    schema: z.boolean(),
+    defaultValue: true as boolean,
+    d37: true,
+    defaultText: "On: HR approves, a director confirms",
+  },
+  "people.directoryShowsPersonalEmail": {
+    title: "Colleagues see a personal email in the directory",
+    what: "When on, the colleague directory shows each person's personal email to colleagues. Off, it is never shown to colleagues (HR and the directors see it on the employee record as before).",
+    schema: z.boolean(),
+    defaultValue: false as boolean,
+    d37: true,
+    defaultText: "Off: personal emails are never shown in the directory",
+  },
   "payroll.ctcIncludesEmployerStatutory": {
     title: "CTC includes the employer's PF and ESI (PY-43)",
     what: "On: CTC = gross pay + employer PF + employer ESI, and a salary structure may count a line that stands for them toward CTC (the run pays the exact statutory figure, never the line as well). Off: CTC is gross pay only and such a line may not count toward CTC.",

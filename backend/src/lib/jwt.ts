@@ -8,16 +8,23 @@ import { env } from "../config/env";
 
 const ACCESS_TTL = env.JWT_ACCESS_TTL as jwt.SignOptions["expiresIn"];
 
-export function signAccessToken(userId: string): string {
-  return jwt.sign({ typ: "access", sub: userId }, env.JWT_ACCESS_SECRET, { expiresIn: ACCESS_TTL });
+// FIX-M1 (independent audit 2026-11-20): every access token carries the account's session version (users.session_version). A password reset or change, a
+// setup-link use, a two-step reset, signing out everywhere and a suspension raise it (modules/auth/tokens.ts, revokeAllUserRefreshTokens), and
+// middleware/authenticate.ts refuses a token whose version is older, so every other session ends at once instead of when its token expires.
+export function signAccessToken(userId: string, sessionVersion = 0): string {
+  return jwt.sign({ typ: "access", sub: userId, sv: sessionVersion }, env.JWT_ACCESS_SECRET, { expiresIn: ACCESS_TTL });
 }
 
-export function verifyAccessToken(token: string): string {
+export function verifyAccessTokenClaims(token: string): { userId: string; sessionVersion: number } {
   const payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as jwt.JwtPayload;
   if (payload.typ !== "access" || typeof payload.sub !== "string") {
     throw new Error("Invalid access token payload");
   }
-  return payload.sub;
+  return { userId: payload.sub, sessionVersion: typeof payload.sv === "number" ? payload.sv : 0 };
+}
+
+export function verifyAccessToken(token: string): string {
+  return verifyAccessTokenClaims(token).userId;
 }
 
 // Short-lived (5m) tokens proving "this user just presented a correct

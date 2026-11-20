@@ -94,6 +94,10 @@ model User {
   status                  UserStatus @default(INVITED)
   failedLoginAttempts     Int        @default(0) @map("failed_login_attempts")
   lockedUntil             DateTime?  @map("locked_until")
+  // FIX-BEGIN C1/M1 (independent audit 2026-11-20): raised by a password reset or change, a setup-link use, a two-step reset and a suspension. Every access token
+  // carries the version it was issued under; middleware/authenticate.ts refuses a token whose version is older, so other sessions end at once.
+  sessionVersion          Int        @default(0) @map("session_version")
+  // FIX-END C1/M1
   totpSecretEncrypted     Bytes?     @map("totp_secret_encrypted")
   totpEnabled             Boolean    @default(false) @map("totp_enabled")
   totpVerifiedAt          DateTime?  @map("totp_verified_at")
@@ -1032,6 +1036,40 @@ enum LeaveLedgerEntryType {
 // greytHR data-migration opening balance (§10) — not emitted by anything
 // built in this phase. RH defaults to carry-forward (no lapse) until HR
 // confirms whether unused RH should lapse at year-end.
+// FIX-BEGIN C1 (independent audit 2026-11-20): a change to the email that receives sign-in and password-reset links (anyone's), or to any contact or
+// identity field of a director, is held here and takes effect only when a director confirms it (never the proposer; for a director's own record, the OTHER
+// director). The old address is told when it is proposed and when it takes effect, and both directors get an in-app notice. Decided once (trigger).
+enum ContactChangeKind {
+  LOGIN_EMAIL
+  DIRECTOR_RECORD
+}
+
+enum ContactChangeStatus {
+  PENDING
+  APPLIED
+  REJECTED
+}
+
+model ContactChangeRequest {
+  id               String              @id @default(cuid())
+  kind             ContactChangeKind
+  status           ContactChangeStatus @default(PENDING)
+  employeeId       String              @map("employee_id")
+  targetUserId     String?             @map("target_user_id")
+  changes          Json
+  source           String
+  proposedByUserId String              @map("proposed_by_user_id")
+  proposedAt       DateTime            @default(now()) @map("proposed_at")
+  decidedByUserId  String?             @map("decided_by_user_id")
+  decidedAt        DateTime?           @map("decided_at")
+  decisionNote     String?             @map("decision_note")
+
+  @@index([status, proposedAt])
+  @@index([employeeId])
+  @@map("contact_change_requests")
+}
+// FIX-END C1
+
 // FIX-BEGIN C2 (independent audit 2026-11-20): creating or removing a director (Super Admin), changing a director's roles, or turning off a director's portal
 // access is proposed by one director and applied only when another confirms (a third director needs every existing director). The database refuses a
 // Super Admin role row that is added or removed without an APPLIED change named in the transaction (trigger on user_roles). No FKs: ids are plain text.

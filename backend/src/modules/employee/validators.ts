@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { env } from "../../config/env";
 
 export const idParamsSchema = z.object({ id: z.string().min(1) });
 
@@ -16,12 +17,16 @@ export const MOBILE_REGEX = /^[0-9+\-\s]{7,15}$/;
 export const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 export const ACCOUNT_NUMBER_REGEX = /^\d{6,20}$/;
 
+// FIX-L4 (independent audit 2026-11-20): production keeps the owners' rule (a gmail.com address). Outside production a reserved test domain is accepted too
+// (RFC 2606/6761: example.com/.org/.net, *.example, *.invalid, *.test), so tests and development data never need a real public mail domain.
+export const RESERVED_TEST_EMAIL = /@(example\.(com|org|net)|[a-z0-9.-]+\.(invalid|test|example)|example\.invalid)$/i;
+export const personalEmailAllowed = (v: string, appEnv: string = env.APP_ENV): boolean => v.endsWith("@gmail.com") || (appEnv !== "production" && RESERVED_TEST_EMAIL.test(v));
 export const gmailSchema = z
   .string()
   .trim()
   .toLowerCase()
   .email("Enter a valid email address.")
-  .refine((v) => v.endsWith("@gmail.com"), "Personal email must be a Gmail address.");
+  .refine((v) => personalEmailAllowed(v), "Personal email must be a Gmail address.");
 
 export const ifscSchema = z.string().trim().toUpperCase().regex(IFSC_REGEX, "Enter a valid IFSC code (e.g. SBIN0001234).");
 
@@ -257,3 +262,6 @@ export const sendInvitationsSchema = z.object({ employeeIds: z.array(z.string().
 
 // A Reveal says why (owner decision): a short reason, kept in the audit row beside who looked and when. Never the value.
 export const revealQuerySchema = z.object({ reason: z.string().trim().min(3, "Say why you need to see it (a few words)").max(200) });
+
+// FIX-C1: turning down a held contact change.
+export const contactChangeRejectSchema = z.object({ note: z.string().trim().min(3).max(300) });

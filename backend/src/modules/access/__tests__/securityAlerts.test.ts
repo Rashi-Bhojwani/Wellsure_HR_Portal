@@ -218,7 +218,10 @@ describe("E1.1 — loud break-glass, append-only audit, manager data scope", () 
       expect(listed.body.events.some((e: { id: string }) => e.id === r.alert.eventId)).toBe(true);
       expect((await api(tokens.hrAdmin).get("/api/access/security-events")).status).toBe(403);
 
-      const self = await api(tokens.sa2).post(`/api/access/security-events/${r.alert.eventId}/acknowledge`, { note: "it was me" });
+      // FIX-M1 (independent audit 2026-11-20): the recovery ended every session of the recovered director, so they act from a fresh session.
+      const { signAccessToken } = await import("../../../lib/jwt");
+      const sa2Fresh = signAccessToken(p.sa2.userId, (await prisma.user.findUniqueOrThrow({ where: { id: p.sa2.userId } })).sessionVersion);
+      const self = await api(sa2Fresh).post(`/api/access/security-events/${r.alert.eventId}/acknowledge`, { note: "it was me" });
       expect(self.status).toBe(403);
       expect(self.body.error.code).toBe("SELF");
       const ok = await api(tokens.sa).post(`/api/access/security-events/${r.alert.eventId}/acknowledge`, { note: "confirmed by phone with them" });

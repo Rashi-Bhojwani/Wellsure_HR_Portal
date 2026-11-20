@@ -1,3 +1,4 @@
+import { personalEmailAllowed } from "../employee/validators";
 import { prisma } from "../../lib/prisma";
 import { leaveTypeIdFor } from "../leave/leaveTypeRoles";
 import { addCalendarDays } from "../../lib/businessDate";
@@ -286,7 +287,7 @@ export function validateEmployeeRow(row: ParsedRow, refs: ReferenceData, tracker
   if (v.employmentType && !EMPLOYMENT_TYPES.includes(v.employmentType.toUpperCase())) {
     errors.push(`employmentType must be one of ${EMPLOYMENT_TYPES.join(", ")}.`);
   }
-  if (v.personalEmail && !/^[^\s@]+@gmail\.com$/i.test(v.personalEmail)) errors.push("personalEmail must be a Gmail address.");
+  if (v.personalEmail && !(/^[^\s@]+@[^\s@]+$/.test(v.personalEmail) && personalEmailAllowed(v.personalEmail.toLowerCase()))) errors.push("personalEmail must be a Gmail address."); // FIX-L4
   if (v.mobile && !MOBILE_REGEX.test(v.mobile)) errors.push("mobile is not a valid phone number.");
   if (v.emergencyContactPhone && !MOBILE_REGEX.test(v.emergencyContactPhone)) errors.push("emergencyContactPhone is not a valid phone number.");
   if (v.officialEmail) {

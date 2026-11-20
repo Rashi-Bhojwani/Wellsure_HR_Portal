@@ -104,8 +104,13 @@ export async function revokeRefreshTokenById(id: string): Promise<void> {
   await prisma.refreshToken.updateMany({ where: { id, revokedAt: null }, data: { revokedAt: new Date() } });
 }
 
+// FIX-M1 (independent audit 2026-11-20): ending every session also raises the account's session version, so every access token already issued stops working
+// at once (lib/jwt.ts, middleware/authenticate.ts) and the person's live connections are closed.
 export async function revokeAllUserRefreshTokens(userId: string): Promise<void> {
   await prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+  const user = await prisma.user.update({ where: { id: userId }, data: { sessionVersion: { increment: 1 } }, select: { employeeId: true } });
+  const { disconnectUserSockets } = await import("../../realtime/emit");
+  disconnectUserSockets(user.employeeId);
 }
 
 export async function listActiveSessions(userId: string) {

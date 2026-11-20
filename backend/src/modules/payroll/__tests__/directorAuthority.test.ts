@@ -442,7 +442,13 @@ describe("director authority", () => {
 
   // Two-step sign-in for directors is OPTIONAL (the owners' decision): off by default, and when the setting is on it is enforced exactly as it was.
   describe("two-step sign-in for directors is optional, and enforced only when the owners turn it on", () => {
-    const setting = (on: boolean | null) => (on === null ? prisma.systemSetting.deleteMany({ where: { key: DIRECTOR_2FA_SETTING_KEY } }) : prisma.systemSetting.upsert({ where: { key: DIRECTOR_2FA_SETTING_KEY }, create: { key: DIRECTOR_2FA_SETTING_KEY, value: on }, update: { value: on } }));
+    // FIX-C1 (independent audit 2026-11-20): the switch is now the two-director Default behaviour "auth.directorTwoFactorCompulsory" (compulsory by default; the
+    // development data has both seeded directors turn it off). null = back to the development data's state (off).
+    const setting = async (on: boolean | null) => {
+      const prop = await prisma.behaviourProposal.create({ data: { key: "auth.directorTwoFactorCompulsory", value: on ?? false, reason: "test", proposedByUserId: p.a.userId } });
+      await prisma.behaviourConfirmation.create({ data: { proposalId: prop.id, confirmedByUserId: p.b.userId } });
+    };
+    void DIRECTOR_2FA_SETTING_KEY;
     afterEach(async () => {
       await setting(null);
       await prisma.user.updateMany({ where: { id: { in: [p.a.userId, p.b.userId] } }, data: { totpEnabled: false } });
@@ -509,11 +515,13 @@ describe("director authority", () => {
         const refused = await put(tm, true);
         expect([refused.status, refused.body.error.code]).toEqual([403, "DIRECTOR_ONLY"]);
         expect(await directorTwoFactorRequired()).toBe(false);
-        const ok = await put(ta, true);
-        expect([ok.status, ok.body.requireDirectorTwoFactor]).toEqual([200, true]);
-        expect(await directorTwoFactorRequired()).toBe(true);
+        // FIX-C1: a director alone no longer changes it here either: one director proposes, the other confirms (Default behaviours).
+        const alone = await put(ta, true);
+        expect([alone.status, alone.body.error.code]).toEqual([409, "USE_DEFAULT_BEHAVIOURS"]);
+        expect(await directorTwoFactorRequired()).toBe(false);
+        await setting(true);
         expect((await request(app).get("/api/settings/security").set(...authHeader(tm))).body.requireDirectorTwoFactor).toBe(true);
-        expect((await put(ta, false)).body.requireDirectorTwoFactor).toBe(false);
+        await setting(null);
       } finally {
         await cleanupFullTestEmployee(x.employeeId);
         await cleanupTestRole(role);
