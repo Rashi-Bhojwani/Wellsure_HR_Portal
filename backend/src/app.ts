@@ -246,7 +246,7 @@ export function trustProxyHopsFor(appEnv: string, explicit: number | undefined):
   return explicit ?? (appEnv === "development" ? 0 : 1);
 }
 
-export function createApp(opts: { trustProxyHops?: number } = {}): Express {
+export function createApp(opts: { trustProxyHops?: number; requestLogger?: typeof logger } = {}): Express {
   const app = express();
 
   // Behind the ALB, every connection comes from the ALB, so without this req.ip is the load balancer's address for everyone: the per-IP login
@@ -273,7 +273,7 @@ export function createApp(opts: { trustProxyHops?: number } = {}): Express {
   // string because <img> can't send headers, so it's redacted from the URL.
   app.use(
     pinoHttp({
-      logger,
+      logger: opts.requestLogger ?? logger,
       serializers: {
         req: (req: { id?: unknown; method: string; url: string; remoteAddress?: string }) => ({
           id: req.id,
@@ -281,6 +281,9 @@ export function createApp(opts: { trustProxyHops?: number } = {}): Express {
           url: req.url.replace(/([?&]t=)[^&]*/g, "$1[redacted]"),
           remoteAddress: req.remoteAddress,
         }),
+        // FIX-H1 (independent audit 2026-11-20): the response log is an allowlist too. The default serializer printed every response header, so each sign-in
+        // and refresh wrote the 30-day refresh token (Set-Cookie) to the log. Only the status code is kept; pino-http adds responseTime itself.
+        res: (res: { statusCode?: number }) => ({ statusCode: res.statusCode }),
       },
     }),
   );

@@ -21,6 +21,27 @@ const REDACTED_KEYS = new Set([
   "typedValue",
 ]);
 
+// FIX-H1 (independent audit 2026-11-20): credentials are removed whole, wherever they appear in a logged or persisted object and whatever their type (a
+// Set-Cookie header is an array). Header names are matched case-insensitively.
+const SECRET_KEYS = new Set([
+  "authorization",
+  "cookie",
+  "set-cookie",
+  "password",
+  "newpassword",
+  "currentpassword",
+  "confirmpassword",
+  "passwordhash",
+  "refreshtoken",
+  "accesstoken",
+  "challengetoken",
+  "totpsecret",
+  "totpsecretencrypted",
+  "x-agent-key",
+  "x-api-key",
+]);
+export const isSecretKey = (key: string): boolean => SECRET_KEYS.has(key.toLowerCase());
+
 function maskLast4(value: string): string {
   const digits = value.replace(/\s/g, "");
   return digits.length <= 4 ? "••••" : `••••${digits.slice(-4)}`;
@@ -41,7 +62,9 @@ export function redact<T>(value: T): T {
   }
   const result: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-    if (REDACTED_KEYS.has(key) && typeof val === "string") {
+    if (isSecretKey(key)) {
+      result[key] = "[redacted]";
+    } else if (REDACTED_KEYS.has(key) && typeof val === "string") {
       result[key] = maskLast4(val);
     } else if (val !== null && typeof val === "object") {
       result[key] = redact(val);
@@ -59,6 +82,9 @@ const SCRUBBERS: Array<[RegExp, string]> = [
   [/\b[A-Z]{5}\d{4}[A-Z]\b/g, "[PAN removed]"],
   [/\b\d{4}[ -]\d{4}[ -]\d{4}\b/g, "[number removed]"],
   [/\b\d{9,18}\b/g, "[number removed]"],
+  // FIX-H1: a cookie or bearer value quoted in free text (an error that prints a header).
+  [/\b(refreshToken|accessToken)=[^;\s"']+/g, "$1=[redacted]"],
+  [/\bBearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [redacted]"],
 ];
 
 export function scrubText(text: string): string {
