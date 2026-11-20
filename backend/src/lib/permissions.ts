@@ -122,3 +122,6 @@ export async function activeUsersHoldingPermission(key: string): Promise<Array<{
   for (const c of candidates) if ((await resolveAccess(c.id)).permissions.has(key)) out.push({ userId: c.id, employeeId: c.employeeId });
   return out;
 }
+
+/** FIX (independent audit 2026-11-20): holds the Developer role and is not a director. */
+export const isDeveloperOnly = (roleCodes: readonly string[]): boolean => roleCodes.includes(DEVELOPER_ROLE_CODE) && !roleCodes.includes(SUPER_ADMIN_ROLE_CODE);

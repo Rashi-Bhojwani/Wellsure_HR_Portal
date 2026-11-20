@@ -12,6 +12,8 @@ describe("Import Center — leave-grants dataset (/api/import/leave-grants)", ()
   const managerRole = `TEST_LEAVEGRANTS_MGR_${Date.now()}`; // import.manage + leave.grant, matching HR_EXECUTIVE_PERMS
   let org: TestOrgMasters;
   let managerToken: string;
+  // FIX-C3 (independent audit 2026-11-20): committing a leave-grants batch proposes it; a seeded director who did not propose it confirms it.
+  let directorToken: string;
   let plTypeId: string;
   const employeeIds: string[] = [];
 
@@ -22,6 +24,9 @@ describe("Import Center — leave-grants dataset (/api/import/leave-grants)", ()
     const manager = await createLoginableTestEmployee(org, { roleCode: managerRole });
     employeeIds.push(manager.employeeId);
     managerToken = await loginAs(manager.employeeCode);
+    const director = await createLoginableTestEmployee(org, { roleCode: "SUPER_ADMIN" });
+    employeeIds.push(director.employeeId);
+    directorToken = await loginAs(director.employeeCode);
 
     const plType = await prisma.leaveType.findUniqueOrThrow({ where: { code: "PL" } });
     plTypeId = plType.id;
@@ -88,7 +93,12 @@ describe("Import Center — leave-grants dataset (/api/import/leave-grants)", ()
       .set(...authHeader(managerToken))
       .send({});
     expect(commitRes.status).toBe(200);
-    expect(commitRes.body.committedRows).toBe(2);
+    expect(commitRes.body.committedRows).toBe(0);
+    expect(commitRes.body.pendingConfirmation).toBe(true);
+    expect(await prisma.leaveLedger.count({ where: { employeeId: employee.employeeId, referenceType: "MANUAL_GRANT" } })).toBe(0);
+    const confirmed = await request(app).post(`/api/leave/change-requests/${commitRes.body.requestId}/confirm`).set(...authHeader(directorToken)).send({});
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.body.result.committedRows).toBe(2);
 
     const entries = await prisma.leaveLedger.findMany({ where: { employeeId: employee.employeeId, leaveTypeId: plTypeId, referenceType: "MANUAL_GRANT" }, orderBy: { entryDate: "asc" } });
     expect(entries).toHaveLength(2);
@@ -117,8 +127,11 @@ describe("Import Center — leave-grants dataset (/api/import/leave-grants)", ()
       .post(`/api/import/batches/${upload.body.batchId}/commit`)
       .set(...authHeader(managerToken))
       .send({});
-    expect(commitRes.status).toBe(400);
-    expect(commitRes.body.error.code).toBe("INSUFFICIENT_BALANCE");
+    expect(commitRes.status).toBe(200);
+    const confirmed = await request(app).post(`/api/leave/change-requests/${commitRes.body.requestId}/confirm`).set(...authHeader(directorToken)).send({});
+    expect(confirmed.status).toBe(400);
+    expect(confirmed.body.error.code).toBe("INSUFFICIENT_BALANCE");
+    expect((await prisma.leaveChangeRequest.findUniqueOrThrow({ where: { id: commitRes.body.requestId } })).status).toBe("PENDING"); // rolled back with the batch
 
     const entries = await prisma.leaveLedger.findMany({ where: { employeeId: employee.employeeId, referenceType: "MANUAL_GRANT", remarks: `abort-test-${suffix}` } });
     expect(entries).toHaveLength(0); // nothing was committed — the transaction rolled back

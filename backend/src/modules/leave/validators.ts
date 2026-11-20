@@ -170,3 +170,7 @@ export const recalculateCommitSchema = z.object({
 export const dashboardQuerySchema = z.object({
   year: z.coerce.number().int().min(2000).max(2100),
 });
+
+// FIX-C3 (independent audit 2026-11-20): leave change requests.
+export const changeRequestsQuerySchema = z.object({ status: z.enum(["PENDING", "ALL"]).optional() });
+export const rejectChangeRequestSchema = z.object({ note: z.string().trim().min(3).max(500) }).strict();

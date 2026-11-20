@@ -45,7 +45,7 @@ const HR_EXECUTIVE_PERMS: string[] = [
   // HR_ADMIN+ only, same narrowing as settings.manage/import.manage.
   "leave.view",
   "leave.approve",
-  "leave.grant",
+  // FIX-C3 (independent audit 2026-11-20): leave.grant moved to HR_ADMIN. HR Executive cannot grant leave at all by default.
   "leave.apply.onBehalf",
   // Phase 5 commit C — Document Center admin and HR-held employee documents.
   // Not salary/bank data, so HR_EXECUTIVE holds them too; MANAGER does not.
@@ -98,6 +98,8 @@ const HR_ADMIN_PERMS: string[] = [
   "attendance.finalise",
   "leave.policy.manage",
   "leave.recalculate",
+  // FIX-C3: HR Admin may PROPOSE a leave grant; a director other than the proposer confirms it (modules/leave/changeRequests.ts).
+  "leave.grant",
   // Phase 5 — config/financial actions stay HR_ADMIN+, same narrowing as settings.manage/leave.policy.manage
   "announcements.manage",
   "engage.moderate",

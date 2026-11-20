@@ -134,6 +134,8 @@ export const STANDALONE_ROOT_MODELS: Record<string, string> = {
   Role: "shared role catalog; cleanupTestRole",
   PayrollReportLayout: "Stage 6: a saved payroll report layout (no FK; append-only); deleteWithDependents(\"PayrollReportLayout\", ids)",
   PayrollParallelComparison: "Stage 8: a saved parallel-run comparison (no FK; a director may delete it); deleteWithDependents(\"PayrollParallelComparison\", ids)",
+  DirectorRoleChange: "FIX-C2: a proposed director role change (no FK; decided once, never deleted); deleteWithDependents(\"DirectorRoleChange\", ids)",
+  LeaveChangeRequest: "FIX-C3: a proposed leave grant, comp-off credit or leave import waiting for a director (no FK; decided once, never deleted); deleteWithDependents(\"LeaveChangeRequest\", ids)",
   BehaviourProposal: "D-37: a behaviour setting proposal (no FK; append-only); deleteWithDependents(\"BehaviourProposal\", ids) also removes its confirmation",
   TdsChallan: "P7-7: a company deposit record (no FK; immutable); deleteWithDependents(\"TdsChallan\", ids)",
   MinimumWageRate: "ST-29: a director-entered rate (no FK; append-only); deleteWithDependents(\"MinimumWageRate\", ids)",
@@ -435,7 +437,11 @@ function delegate(modelName: string): Delegate {
 // test-purge exception (app.audit_purge = 'test' in a dev-marked database).
 const PURGE_GUARDED_MODELS = new Set(["RawPunch", "ManualAttendanceEntry", "AttendanceOverride", "ShiftOverride", "LeaveDayRelease", "AttendancePeriodLock", "PayrollItemVersion", "PayrollItemConfirmation", "PayrollApproval", "PayrollEvent", "EmployeeSalary", "EmployeeSalaryLine", "PayrollSalaryRevision", "PayrollAdjustment", "PayrollRun", "PayrollRunItem", "PayrollRunLine", "PayrollPeriodLock", "PayrollRunRelease", "Payslip", "BankTransferBatch", "BankTransferRow", "PayrollOutput", "PayrollSetupSignoff", "DirectorActionNotice", "DirectorActionReceipt", "RolePermissionRemoval", "HrCapabilitySwitch", "PayrollSalaryHold", "PayrollSalaryRelease", "PayrollMonthlyInput", "PayrollInputBatch", "RemoteWorkMark", "RemoteAttendanceEvent", "BankRowRejection", "BankFileSentMark", "BankRepaymentPlan", "BankRepaymentBatch", "BankRepaymentRow", "PayslipLink", "PayrollExclusion", "TaxWindow", "TaxDeclaration", "TaxDeclarationLine", "TaxProof", "TaxProofDecision", "AttendanceLock", "HolidayLocationScope", "WeekendOverride", "LeaveTypeReviewer", "SwipeDecision", "DeviceSyncRequest", "LeaverLeaveRecalc", "TaxOpening", "Loan", "LoanChange", "LoanTypeVersion", "ClaimTypeVersion", "ReimbursementClaim", "ClaimDecision", "FnfSettlement", "TdsChallan", "TdsChallanConfirmation", "StatutoryChallan", "StatutoryChallanConfirmation", "ComplianceDueDate", "ComplianceDueMark", "PayrollRunCompany", "PayrollCompanySetting", "PayrollCompanySettingConfirmation", "EmployeeStatutoryDated", "LedgerAccountMapping", "Form16PartAFile", "MinimumWageRate", "MinimumWageCategory", "MinimumWageBasis", "OffCycleRun", "OffCycleFinalisation", "OffCycleHeldRelease", "OffCycleLoanRecovery", "OffCycleBankBatch", "BehaviourProposal", "BehaviourConfirmation", "IdentityChangeRequest", "EmployeeStatutoryHistory", "CompanyDocumentAckRequirement", "CompanyDocumentAcknowledgement", "EmployeeProbationDecision", "DataErasure", "PayrollReportLayout", "StatutoryPackReview",
   // FIX-H3: the leave ledger is append-only in the database; fixture rows go through the test purge exception.
-  "LeaveLedger"]);
+  "LeaveLedger",
+  // FIX-C3: decided once, never deleted outside the test purge.
+  "LeaveChangeRequest",
+  // FIX-C2: decided once, never deleted outside the test purge; a fixture's Super Admin role row goes through the purge too (user_roles trigger).
+  "DirectorRoleChange", "UserRole"]);
 
 // PEEPS-BEGIN assets
 for (const m of ["Asset", "AssetAssignment", "AssetEvent", "AssetSettingVersion", "AssetSettingConfirmation"]) PURGE_GUARDED_MODELS.add(m);
@@ -527,7 +533,12 @@ export async function deleteWithDependents(model: string, ids: string[]): Promis
       });
     } else if (idSet && idSet.size > 0) await delegate(name).deleteMany({ where: { id: { in: [...idSet] } } });
     const wheres = idlessWheres.get(name);
-    if (wheres) await delegate(name).deleteMany({ where: { OR: wheres } });
+    if (wheres && PURGE_GUARDED_MODELS.has(name)) {
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe("SELECT set_config('app.audit_purge', 'test', true)");
+        await (tx as unknown as Record<string, Delegate>)[name.charAt(0).toLowerCase() + name.slice(1)]!.deleteMany({ where: { OR: wheres } });
+      });
+    } else if (wheres) await delegate(name).deleteMany({ where: { OR: wheres } });
   }
 }
 

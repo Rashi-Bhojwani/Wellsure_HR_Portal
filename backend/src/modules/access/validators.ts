@@ -17,7 +17,10 @@ export const updateRoleSchema = z
 const reason = z.string().trim().min(3, "Give a reason (at least a few words).").max(500);
 export const setOverrideSchema = z.object({ effect: z.enum(["GRANT", "REVOKE"]), reason });
 export const reasonSchema = z.object({ reason });
-export const assignRoleSchema = z.object({ code: z.string().min(1).max(40) });
+// FIX-C2: a director role change carries a reason, and adding a director beyond the second says so explicitly.
+export const assignRoleSchema = z.object({ code: z.string().min(1).max(40), reason: z.string().trim().min(3).max(300).optional(), thirdDirector: z.boolean().optional() });
+export const removeRoleBodySchema = z.object({ reason: z.string().trim().min(3).max(300).optional() }).optional();
+export const directorChangeRejectSchema = z.object({ note: z.string().trim().min(3).max(300) });
 
 export const idParamsSchema = z.object({ id: z.string().min(1) });
 export const securityEventsQuerySchema = z.object({ status: z.enum(["open", "all"]).optional() });

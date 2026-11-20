@@ -359,8 +359,11 @@ describe("Roles & permissions (E1)", () => {
     it("with a second active Super Admin, either can be removed", async () => {
       await prisma.user.update({ where: { id: people.sa2.userId }, data: { status: "ACTIVE" } });
       try {
+        // FIX-C2 (independent audit 2026-11-20): removing a director's status is a proposal (202) that the other director confirms.
         const res = await api(tokens.sa).del(`/api/access/employees/${people.sa2.employeeId}/roles/SUPER_ADMIN`);
-        expect(res.status).toBe(200);
+        expect(res.status).toBe(202);
+        const confirmed = await api(await loginAs(people.sa2.employeeCode)).post(`/api/access/director-changes/${res.body.id}/confirm`);
+        expect(confirmed.body.applied).toBe(true);
         // …and now people.sa is the last again.
         expect((await api(tokens.sa).del(`/api/access/employees/${people.sa.employeeId}/roles/SUPER_ADMIN`)).status).toBe(409);
       } finally {
@@ -374,10 +377,12 @@ describe("Roles & permissions (E1)", () => {
       await prisma.user.update({ where: { id: people.sa2.userId }, data: { status: "ACTIVE" } });
       const first = await api(tokens.sa).post(`/api/employees/${people.sa2.employeeId}/separations`, { lastWorkingDate: "2026-12-31", reason: "Resigned" });
       try {
-        expect(first.status).toBe(201);
+        // FIX-C2 (independent audit 2026-11-20): a director is never separated directly: their status is removed first through the two-director change.
+        expect(first.status).toBe(409);
+        expect(first.body.error.code).toBe("DIRECTOR_CHANGE_REQUIRED");
         const second = await api(tokens.sa).post(`/api/employees/${people.sa.employeeId}/separations`, { lastWorkingDate: "2026-12-31", reason: "Resigned" });
         expect(second.status).toBe(409);
-        expect(second.body.error.code).toBe("LAST_SUPER_ADMIN");
+        expect(second.body.error.code).toBe("DIRECTOR_CHANGE_REQUIRED");
       } finally {
         await prisma.separation.deleteMany({ where: { employeeId: people.sa2.employeeId } });
         await prisma.employee.update({ where: { id: people.sa2.employeeId }, data: { lastWorkingDate: null } });

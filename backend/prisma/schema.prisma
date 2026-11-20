@@ -1032,6 +1032,78 @@ enum LeaveLedgerEntryType {
 // greytHR data-migration opening balance (§10) — not emitted by anything
 // built in this phase. RH defaults to carry-forward (no lapse) until HR
 // confirms whether unused RH should lapse at year-end.
+// FIX-BEGIN C2 (independent audit 2026-11-20): creating or removing a director (Super Admin), changing a director's roles, or turning off a director's portal
+// access is proposed by one director and applied only when another confirms (a third director needs every existing director). The database refuses a
+// Super Admin role row that is added or removed without an APPLIED change named in the transaction (trigger on user_roles). No FKs: ids are plain text.
+enum DirectorChangeAction {
+  GRANT_SUPER_ADMIN
+  REVOKE_SUPER_ADMIN
+  ASSIGN_ROLE
+  REMOVE_ROLE
+  SUSPEND
+}
+
+enum DirectorChangeStatus {
+  PENDING
+  APPLIED
+  REJECTED
+}
+
+model DirectorRoleChange {
+  id                       String               @id @default(cuid())
+  action                   DirectorChangeAction
+  status                   DirectorChangeStatus @default(PENDING)
+  targetUserId             String               @map("target_user_id")
+  roleCode                 String?              @map("role_code")
+  reason                   String
+  thirdDirectorAcknowledged Boolean             @default(false) @map("third_director_acknowledged")
+  proposedByUserId         String               @map("proposed_by_user_id")
+  proposedAt               DateTime             @default(now()) @map("proposed_at")
+  confirmedByUserIds       String[]             @default([]) @map("confirmed_by_user_ids")
+  decidedByUserId          String?              @map("decided_by_user_id")
+  decidedAt                DateTime?            @map("decided_at")
+  decisionNote             String?              @map("decision_note")
+
+  @@index([status, proposedAt])
+  @@map("director_role_changes")
+}
+// FIX-END C2
+
+// FIX-BEGIN C3 (independent audit 2026-11-20): a leave-changing action (a manual grant or debit, a manual comp-off credit, a leave-grants import) is a
+// proposal. It changes no balance until a director who is not the proposer, and not one of the people it credits, confirms it. No FKs: user and employee
+// ids are plain text, as on the other append-only decision records. A row moves PENDING -> CONFIRMED or REJECTED once (database trigger), and is never deleted.
+enum LeaveChangeKind {
+  GRANT
+  COMP_OFF_GRANT
+  IMPORT
+}
+
+enum LeaveChangeStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+model LeaveChangeRequest {
+  id                String            @id @default(cuid())
+  kind              LeaveChangeKind
+  status            LeaveChangeStatus @default(PENDING)
+  payload           Json
+  importBatchId     String?           @map("import_batch_id")
+  targetEmployeeIds String[]          @map("target_employee_ids")
+  summary           String
+  proposedByUserId  String            @map("proposed_by_user_id")
+  proposedAt        DateTime          @default(now()) @map("proposed_at")
+  decidedByUserId   String?           @map("decided_by_user_id")
+  decidedAt         DateTime?         @map("decided_at")
+  decisionNote      String?           @map("decision_note")
+  result            Json?
+
+  @@index([status, proposedAt])
+  @@map("leave_change_requests")
+}
+// FIX-END C3
+
 model LeaveLedger {
   id              String               @id @default(cuid())
   employeeId      String               @map("employee_id")

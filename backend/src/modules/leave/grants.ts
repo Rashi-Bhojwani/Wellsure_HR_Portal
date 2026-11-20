@@ -23,7 +23,19 @@ interface ManualGrantInput {
   remarks?: string;
 }
 
-export async function manualGrantOrDebit(input: ManualGrantInput, meta: ActorMeta) {
+// FIX-C3 (independent audit 2026-11-20): a manual grant or debit is no longer written by the person who asks for it. The route proposes it
+// (modules/leave/changeRequests.ts); this runs only when a director other than the proposer confirms, inside the confirmation's transaction.
+export async function validateManualGrant(input: ManualGrantInput) {
+  const employee = await prisma.employee.findUnique({ where: { id: input.employeeId }, select: { id: true, status: true } });
+  if (!employee || employee.status !== "ACTIVE") throw new HttpError(404, "Employee not found.", "NOT_FOUND");
+  const leaveType = await prisma.leaveType.findUnique({ where: { id: input.leaveTypeId }, include: { policy: true } });
+  if (!leaveType || !leaveType.isActive) throw new HttpError(400, "Invalid leave type.", "INVALID_LEAVE_TYPE");
+  if (await isLeaveTypeFor("COMP_OFF", leaveType.id)) throw new HttpError(400, "Use the Comp-Off Grant action for comp-off credits — it needs hours worked to compute expiry.", "USE_COMP_OFF_GRANT");
+  if (new Prisma.Decimal(input.days).equals(0)) throw new HttpError(400, "days must not be zero.", "INVALID_DAYS");
+  return leaveType;
+}
+
+export async function manualGrantOrDebit(input: ManualGrantInput, meta: ActorMeta, db?: Prisma.TransactionClient) {
   const employee = await prisma.employee.findUnique({ where: { id: input.employeeId }, select: { id: true, status: true } });
   if (!employee || employee.status !== "ACTIVE") {
     throw new HttpError(404, "Employee not found.", "NOT_FOUND");
@@ -44,7 +56,9 @@ export async function manualGrantOrDebit(input: ManualGrantInput, meta: ActorMet
   const entryDate = new Date(input.entryDate);
   const entryType = days.greaterThan(0) ? "GRANT" : "DEBIT";
 
-  const entry = await withEmployeeLeaveLock(input.employeeId, async (tx) => {
+  const locked = <T,>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> =>
+    db ? db.$queryRaw`SELECT id FROM employees WHERE id = ${input.employeeId} FOR UPDATE`.then(() => fn(db)) : withEmployeeLeaveLock(input.employeeId, fn);
+  const entry = await locked(async (tx) => {
     if (days.lessThan(0)) {
       const policy = leaveType.policy;
       if (!policy?.skipBalanceCheck) {
@@ -94,7 +108,7 @@ interface ManualCompOffGrantInput {
   remarks?: string;
 }
 
-export async function manualCompOffGrant(input: ManualCompOffGrantInput, meta: ActorMeta) {
+export async function manualCompOffGrant(input: ManualCompOffGrantInput, meta: ActorMeta, db?: Prisma.TransactionClient) {
   const employee = await prisma.employee.findUnique({ where: { id: input.employeeId }, select: { id: true, status: true } });
   if (!employee || employee.status !== "ACTIVE") {
     throw new HttpError(404, "Employee not found.", "NOT_FOUND");
@@ -106,7 +120,7 @@ export async function manualCompOffGrant(input: ManualCompOffGrantInput, meta: A
     hoursWorked: input.hoursWorked,
     source: "MANUAL_GRANT",
     grantedByUserId: meta.actorUserId,
-  });
+  }, db);
 
   await writeAuditLog({
     ...meta,

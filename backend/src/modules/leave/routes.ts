@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authenticate } from "../../middleware/authenticate";
 import { requirePermission } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
+import { refuseDeveloper } from "../../middleware/refuseDeveloper";
 import * as controller from "./controller";
 import {
   applyLeaveSchema,
@@ -29,6 +30,8 @@ import {
   updateLeaveTypeSchema,
   upsertLeavePolicySchema,
   yearEndListQuerySchema,
+  changeRequestsQuerySchema,
+  rejectChangeRequestSchema,
 } from "./validators";
 
 // Leave (Phase 4, spec §5). Permission/scope narrowing happens inside the
@@ -67,6 +70,11 @@ leaveRouter.get("/calendar", validate({ query: calendarQuerySchema }), controlle
 leaveRouter.post("/grants", grant, validate({ body: manualGrantSchema }), controller.manualGrant);
 leaveRouter.post("/comp-off/grant", grant, validate({ body: manualCompOffGrantSchema }), controller.manualCompOffGrant);
 leaveRouter.get("/comp-off", validate({ query: compOffQuerySchema }), controller.listCompOffCredits);
+// FIX-C3 (independent audit 2026-11-20): the proposals above wait here. Listing: a director sees every one, anyone else only their own. Confirming: a director
+// other than the proposer and not one of the people it credits (checked in modules/leave/changeRequests.ts). Turning down: a director or the proposer.
+leaveRouter.get("/change-requests", refuseDeveloper, validate({ query: changeRequestsQuerySchema }), controller.listChangeRequests);
+leaveRouter.post("/change-requests/:id/confirm", refuseDeveloper, validate({ params: idParamsSchema }), controller.confirmChangeRequest);
+leaveRouter.post("/change-requests/:id/reject", refuseDeveloper, validate({ params: idParamsSchema, body: rejectChangeRequestSchema }), controller.rejectChangeRequest);
 
 // Admin: Year End Process (leave.yearend.manage) — preview -> discard/
 // re-preview -> commit; see modules/leave/yearEnd.ts for the full lifecycle.

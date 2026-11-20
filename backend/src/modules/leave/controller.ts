@@ -3,6 +3,7 @@ import { businessToday } from "../../lib/businessDate";
 import * as balancesService from "./balances";
 import * as calendarService from "./calendar";
 import * as dashboardService from "./dashboard";
+import * as changeRequests from "./changeRequests";
 import * as grantsService from "./grants";
 import * as holidaysService from "./holidays";
 import * as ledgerView from "./ledgerView";
@@ -153,12 +154,26 @@ export async function deleteRestrictedHoliday(req: Request, res: Response): Prom
 
 // ── Admin: manual grant/debit + comp-off grant (leave.grant) ────────────
 
+// FIX-C3 (independent audit 2026-11-20): a manual grant, debit or comp-off credit is a proposal (202); a different director confirms it.
+const changeActor = (req: Request) => ({ userId: req.user!.userId, employeeId: req.user!.employeeId });
 export async function manualGrant(req: Request, res: Response): Promise<void> {
-  res.status(201).json(await grantsService.manualGrantOrDebit(req.body, actorMeta(req)));
+  res.status(202).json(await changeRequests.proposeGrant(req.body, changeActor(req), actorMeta(req)));
 }
 
 export async function manualCompOffGrant(req: Request, res: Response): Promise<void> {
-  res.status(201).json(await grantsService.manualCompOffGrant(req.body, actorMeta(req)));
+  res.status(202).json(await changeRequests.proposeCompOff(req.body, changeActor(req), actorMeta(req)));
+}
+
+export async function listChangeRequests(req: Request, res: Response): Promise<void> {
+  res.json({ requests: await changeRequests.listRequests(changeActor(req), req.query.status === "ALL" ? "ALL" : "PENDING") });
+}
+
+export async function confirmChangeRequest(req: Request, res: Response): Promise<void> {
+  res.json(await changeRequests.confirmRequest(String(req.params.id), changeActor(req), actorMeta(req)));
+}
+
+export async function rejectChangeRequest(req: Request, res: Response): Promise<void> {
+  res.json(await changeRequests.rejectRequest(String(req.params.id), String(req.body.note), changeActor(req), actorMeta(req)));
 }
 
 export async function listCompOffCredits(req: Request, res: Response): Promise<void> {

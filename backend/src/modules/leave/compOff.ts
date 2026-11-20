@@ -31,7 +31,8 @@ interface CreditCompOffInput {
 // source: "ATTENDANCE" once it detects a qualifying holiday/week-off
 // punch (spec §4.4) — reusing this eligibility check, expiry computation
 // and ledger GRANT entry rather than reimplementing any of it.
-export async function creditCompOff(input: CreditCompOffInput): Promise<CompOffCredit> {
+// FIX-C3: `db` runs the credit inside the caller's transaction (a confirmed leave change request), which takes the same per-employee lock itself.
+export async function creditCompOff(input: CreditCompOffInput, db?: Prisma.TransactionClient): Promise<CompOffCredit> {
   const cofType = await requireLeaveTypeFor("COMP_OFF"); // audit fix: the comp-off type is a director setting, not the code "COF"
   // Audit fix 2026-11-18 (audit #7): the minimum hours and the expiry are the comp-off type's own policy; blank is refused, never 4 hours / 60 days.
   const blank = [...(cofType.policy?.compOffMinHoursWorked == null ? ["the minimum hours worked to earn it"] : []), ...(cofType.policy?.compOffExpiryDays == null ? ["the expiry in days"] : [])];
@@ -45,7 +46,9 @@ export async function creditCompOff(input: CreditCompOffInput): Promise<CompOffC
   const earnedDays = new Prisma.Decimal(1); // Phase 4 always grants a full day — partial-day comp-off
   // (e.g. 0.5 for a short shift worked) is a future refinement, not asked for here
 
-  return withEmployeeLeaveLock(input.employeeId, async (tx) => {
+  const locked = <T,>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> =>
+    db ? db.$queryRaw`SELECT id FROM employees WHERE id = ${input.employeeId} FOR UPDATE`.then(() => fn(db)) : withEmployeeLeaveLock(input.employeeId, fn);
+  return locked(async (tx) => {
     const ledgerEntry = await writeLedgerEntry(tx, {
       employeeId: input.employeeId,
       leaveTypeId: cofType.id,

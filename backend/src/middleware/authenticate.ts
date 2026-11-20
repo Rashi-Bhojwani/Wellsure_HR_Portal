@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { verifyAccessToken } from "../lib/jwt";
+import { developerWriteRefused } from "../lib/developerFirewall";
 import { resolveAccess } from "../lib/permissions";
 import { prisma } from "../lib/prisma";
 import { HttpError } from "./errorHandler";
@@ -44,6 +45,11 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
       return;
     }
     req.user = user;
+    // FIX-C3/H5/M7 (independent audit 2026-11-20): the Developer role is view and diagnostics only (lib/developerFirewall.ts).
+    if (developerWriteRefused(user.roleCodes, req.method, req.originalUrl)) {
+      next(new HttpError(403, "The Developer role is view and diagnostics only: it cannot change employee, leave, pay, attendance or identity data.", "DEVELOPER_VIEW_ONLY"));
+      return;
+    }
     next();
   } catch (err) {
     next(err);

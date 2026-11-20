@@ -122,7 +122,11 @@ describe("the developer ceiling", () => {
       expect((await request(app).get("/api/payroll/salary/employees").set(...authHeader(token))).status).toBe(403);
       expect((await request(app).get("/api/payroll/rules").set(...authHeader(token))).status).toBe(403); // request 13 (Stage 8 block): the rule values are refused to the Developer role on the backend
     } finally {
-      await prisma.userRole.deleteMany({ where: { userId: both.userId, roleId: sup.id } });
+      // FIX-C2: a Super Admin role row leaves only through a confirmed director change, or the test purge.
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe("SELECT set_config('app.audit_purge', 'test', true)");
+        await tx.userRole.deleteMany({ where: { userId: both.userId, roleId: sup.id } });
+      });
       await prisma.$executeRawUnsafe('ALTER TABLE "user_roles" ENABLE TRIGGER "user_roles_developer_not_super_admin"');
     }
   });

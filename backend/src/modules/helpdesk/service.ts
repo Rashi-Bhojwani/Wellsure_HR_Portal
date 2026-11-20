@@ -553,6 +553,8 @@ export async function downloadAttachment(attachmentId: string, viewer: HelpdeskV
   }
   // An internal note's attachments are as invisible to the raiser as the note.
   if (access.mode === "raiser" && attachment.message.isInternalNote) throw new HttpError(404, "Attachment not found.", "NOT_FOUND");
+  // FIX-H5 (independent audit 2026-11-20): the Developer never opens a file someone else uploaded (it may carry personal data). Their own ticket's files only.
+  if (access.mode !== "raiser" && (await import("../../lib/permissions")).isDeveloperOnly(await (await import("../../lib/permissions")).resolveUserRoleCodes(viewer.userId))) throw new HttpError(403, "The Developer role cannot open files other people uploaded.", "FORBIDDEN");
   // PEEPS-BEGIN helpdesk-visibility
   await categoryVisibility.auditDirectorOpen(ticket!, viewer, meta);
   const guarded = await categoryVisibility.downloadDescriptor(attachment.id, ticket!.category, ticket!.id);

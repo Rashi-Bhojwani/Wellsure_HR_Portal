@@ -32,6 +32,11 @@ export async function initiateSeparation(employeeId: string, input: InitiateSepa
   // Admins who aren't themselves on their way out.
   const user = await prisma.user.findUnique({ where: { employeeId }, select: { id: true } });
   if (user) await assertSuperAdminRemains(user.id, { excludeLeaving: true });
+  // FIX-C2 (independent audit 2026-11-20): separating someone deactivates their account, so for a director it would remove director status without the other
+  // director. A director's status is removed first (Roles: one director proposes, the other confirms), then they can be separated like anyone else.
+  if (user && (await isActiveSuperAdmin(user.id))) {
+    throw new HttpError(409, "This person is a director. Remove their director status first (one director proposes, the other confirms), then record the separation.", "DIRECTOR_CHANGE_REQUIRED");
+  }
 
   const lastWorkingDate = new Date(input.lastWorkingDate);
   // Effective dating (EF1): their history ends the day after this date, so

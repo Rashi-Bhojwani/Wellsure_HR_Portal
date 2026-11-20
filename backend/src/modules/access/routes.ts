@@ -18,6 +18,7 @@ import {
   securityEventsQuerySchema,
   idParamsSchema,
   acknowledgeSchema,
+  directorChangeRejectSchema,
 } from "./validators";
 
 // Roles & permissions (Phase 5 commit E1). The gates here only decide who
@@ -41,6 +42,10 @@ const viewPerson = canView("role.view", "user.security.manage", "manager.permiss
 accessRouter.get("/employees/:employeeId", viewPerson, validate({ params: employeeParamsSchema }), controller.getEmployeeAccess);
 accessRouter.post("/employees/:employeeId/roles", validate({ params: employeeParamsSchema, body: assignRoleSchema }), controller.assignRole);
 accessRouter.delete("/employees/:employeeId/roles/:code", validate({ params: employeeRoleParamsSchema }), controller.removeRole);
+// FIX-C2 (independent audit 2026-11-20): changes to who is a director wait here for the other director (checked in the service: directors only).
+accessRouter.get("/director-changes", controller.listDirectorChanges);
+accessRouter.post("/director-changes/:id/confirm", validate({ params: idParamsSchema }), controller.confirmDirectorChange);
+accessRouter.post("/director-changes/:id/reject", validate({ params: idParamsSchema, body: directorChangeRejectSchema }), controller.rejectDirectorChange);
 accessRouter.put("/employees/:employeeId/overrides/:key", validate({ params: employeeKeyParamsSchema, body: setOverrideSchema }), controller.setOverride);
 accessRouter.delete("/employees/:employeeId/overrides/:key", validate({ params: employeeKeyParamsSchema, body: reasonSchema }), controller.clearOverride);
 accessRouter.post("/employees/:employeeId/reset-2fa", validate({ params: employeeParamsSchema, body: reasonSchema }), controller.resetTwoFactor);

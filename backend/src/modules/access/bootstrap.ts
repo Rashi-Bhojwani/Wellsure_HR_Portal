@@ -128,7 +128,13 @@ export async function provisionSuperAdmin(rawInput: BootstrapInput): Promise<Boo
     }
     const userId = existing.user.id;
     const alreadyHeld = await prisma.userRole.findUnique({ where: { userId_roleId: { userId, roleId: superAdminRole.id } } });
-    if (!alreadyHeld) await prisma.userRole.create({ data: { userId, roleId: superAdminRole.id, assignedByUserId: null } });
+    // FIX-C2: the database refuses a Super Admin role row outside a confirmed director change, except this first-director bootstrap while no active one exists.
+    if (!alreadyHeld) {
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe("SELECT set_config('app.director_bootstrap', 'on', true)");
+        await tx.userRole.create({ data: { userId, roleId: superAdminRole.id, assignedByUserId: null } });
+      });
+    }
 
     let link: string | null = null;
     const email = existing.personal?.personalEmail ?? null;
@@ -174,6 +180,7 @@ export async function provisionSuperAdmin(rawInput: BootstrapInput): Promise<Boo
       },
     });
     const user = await tx.user.create({ data: { employeeId: employee.id, status: "INVITED" } });
+    await tx.$executeRawUnsafe("SELECT set_config('app.director_bootstrap', 'on', true)"); // FIX-C2: see above
     await tx.userRole.create({ data: { userId: user.id, roleId: superAdminRole.id, assignedByUserId: null } });
     if (employeeRole) await tx.userRole.create({ data: { userId: user.id, roleId: employeeRole.id, assignedByUserId: null } });
     await tx.employeePersonal.create({

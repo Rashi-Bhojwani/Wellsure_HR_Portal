@@ -249,7 +249,24 @@ export const DEVELOPER_ROLE_CODE = "DEVELOPER";
 // permission to someone holding the Developer role is refused and never resolved.
 // Final merge 2026-11-19 (docs/plans/FINAL_MERGE_REPORT.md): leave policies change people's leave balances (accrual, carry-forward, encashment), so the person who
 // builds and runs the system no longer holds or can be given them. Not a sensitive data class (no personal data is shown), so it is listed here by name.
-export const DEVELOPER_ALSO_FORBIDDEN: readonly PermissionKey[] = ["leave.policy.manage"];
+// FIX-C3/H5/M7 (independent audit 2026-11-20): the Developer keeps view and diagnostics only. Every write or import that changes employee, leave, pay,
+// attendance policy or identity data is forbidden by name, so lib/permissions.ts removes it from a Developer whatever is stored, the access service refuses to
+// give it to a Developer role or holder, and the migration fix_20261120091000_developer_view_only strips it from existing databases.
+export const DEVELOPER_WRITE_FORBIDDEN: readonly PermissionKey[] = [
+  "employee.create", "employee.edit", "employee.manage", "employee.separate", "profile.changerequest.approve", "invitations.send",
+  "org.manage", "import.manage", "import.details.manage",
+  "leave.apply.onBehalf", "leave.approve", "leave.grant", "leave.recalculate", "leave.yearend.manage",
+  "attendance.config.manage", "attendance.manual.enter", "attendance.process", "attendance.devices.manage", "attendance.regularization.approve",
+  "attendance.regularization.bulk", "attendance.override.manage", "attendance.finalise", "attendance.manual.upload", "attendance.roster.manage", "attendance.unlock",
+  "manager.appoint", "manager.team.assign",
+  // PEEPS-BEGIN exits
+  "exits.manage", "exits.accept", "exits.checklist.complete",
+  // PEEPS-END exits
+  // PEEPS-BEGIN recruitment-offers
+  "recruitment.onboarding",
+  // PEEPS-END recruitment-offers
+];
+export const DEVELOPER_ALSO_FORBIDDEN: readonly PermissionKey[] = ["leave.policy.manage", ...DEVELOPER_WRITE_FORBIDDEN];
 export const DEVELOPER_FORBIDDEN_KEYS: readonly PermissionKey[] = [...new Set<PermissionKey>([...SENSITIVE_PERMISSION_KEYS, ...PERMISSION_KEYS.filter((k) => k.startsWith("reports.")), ...DEVELOPER_ALSO_FORBIDDEN])];
 
 /**
@@ -289,20 +306,16 @@ export const HR_FORBIDDEN_KEYS: readonly PermissionKey[] = [
 ];
 
 /** What the DEVELOPER role is given: what is needed to build and run the system, and nothing in SENSITIVE_PERMISSION_KEYS (a test pins that). */
+// FIX-C3/H5/M7 (independent audit 2026-11-20): view and diagnostics only. org.manage, import.manage, attendance.config.manage, attendance.process,
+// attendance.devices.manage and attendance.roster.manage were removed (DEVELOPER_WRITE_FORBIDDEN); helpdesk.manage stays (the support queue is the role's job).
 export const DEVELOPER_ROLE_PERMISSIONS: readonly PermissionKey[] = [
   "employee.view",
-  "org.manage",
-  "import.manage",
   "role.view",
   "audit.view",
   "attendance.view",
-  "attendance.config.manage",
-  "attendance.process",
-  "attendance.devices.manage",
   "attendance.swipes.view",
   "attendance.regularization.view",
   "attendance.exceptions.view",
-  "attendance.roster.manage",
   "leave.view",
   // leave.policy.manage removed 2026-11-19 (final merge): it is in DEVELOPER_ALSO_FORBIDDEN.
   // No report key (owners, 2026-11-14): every report is closed to the Developer (reports.view, reports.attendance.view, reports.leave.view removed).

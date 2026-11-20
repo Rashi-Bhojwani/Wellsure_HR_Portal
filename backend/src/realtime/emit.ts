@@ -16,7 +16,7 @@ export interface RoomEmitter {
   to(room: string | string[]): { emit(event: string, ...args: unknown[]): unknown };
   // Both the real server and the Redis emitter can move a user's sockets
   // between rooms across every api instance.
-  in?(room: string | string[]): { socketsJoin(rooms: string | string[]): unknown; socketsLeave(rooms: string | string[]): unknown };
+  in?(room: string | string[]): { socketsJoin(rooms: string | string[]): unknown; socketsLeave(rooms: string | string[]): unknown; disconnectSockets?(close?: boolean): unknown };
   // The real server only: the same operations on this instance's own sockets, applied at once (the Redis adapter otherwise applies them when the request
   // comes back from Redis, one round trip later).
   local?: { in(room: string | string[]): { socketsLeave(rooms: string | string[]): unknown } };
@@ -33,6 +33,12 @@ export function setSocketServer(server: RoomEmitter | SocketIOServer | null): vo
 
 export function getSocketServer(): RoomEmitter | null {
   return io;
+}
+
+// FIX-M2 (independent audit 2026-11-20): a person's live connections are closed at once when their access is suspended, deactivated, separated or their
+// roles change (the handshake re-checks status and roles on reconnect). Works across api instances: the Redis adapter or emitter carries it.
+export function disconnectUserSockets(employeeId: string): void {
+  io?.in?.(`user:${employeeId}`).disconnectSockets?.(true);
 }
 
 // Payload shape shared by leave.applied/leave.decided (spec §8) — enough

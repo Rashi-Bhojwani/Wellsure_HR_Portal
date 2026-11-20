@@ -1,3 +1,4 @@
+import * as directorChanges from "./directorChanges";
 import type { Request, Response } from "express";
 import * as service from "./service";
 
@@ -19,11 +20,22 @@ export async function updateRole(req: Request, res: Response): Promise<void> {
 export async function getEmployeeAccess(req: Request, res: Response): Promise<void> {
   res.status(200).json(await service.getEmployeeAccess(emp(req), actor(req)));
 }
+// FIX-C2: a change about a director (or making one) is a proposal: 202 until the other director confirms it.
+const sendMaybePending = (res: Response, body: unknown) => res.status((body as { pendingConfirmation?: boolean }).pendingConfirmation ? 202 : 200).json(body);
 export async function assignRole(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await service.assignRole(emp(req), req.body.code, actor(req), actorMeta(req)));
+  sendMaybePending(res, await service.assignRole(emp(req), req.body.code, actor(req), actorMeta(req), { reason: req.body.reason, thirdDirector: req.body.thirdDirector }));
 }
 export async function removeRole(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await service.removeRole(emp(req), req.params.code as string, actor(req), actorMeta(req)));
+  sendMaybePending(res, await service.removeRole(emp(req), req.params.code as string, actor(req), actorMeta(req), { reason: (req.body as { reason?: string } | undefined)?.reason }));
+}
+export async function listDirectorChanges(req: Request, res: Response): Promise<void> {
+  res.json(await directorChanges.listDirectorChanges({ userId: req.user!.userId, employeeId: req.user!.employeeId }));
+}
+export async function confirmDirectorChange(req: Request, res: Response): Promise<void> {
+  res.json(await directorChanges.confirmDirectorChange(String(req.params.id), { userId: req.user!.userId, employeeId: req.user!.employeeId }, { ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null }));
+}
+export async function rejectDirectorChange(req: Request, res: Response): Promise<void> {
+  res.json(await directorChanges.rejectDirectorChange(String(req.params.id), String(req.body.note), { userId: req.user!.userId, employeeId: req.user!.employeeId }, { ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null }));
 }
 export async function setOverride(req: Request, res: Response): Promise<void> {
   res.status(200).json(await service.setOverride(emp(req), req.params.key as string, req.body, actor(req), actorMeta(req)));
@@ -51,6 +63,6 @@ export async function acknowledgeSecurityEvent(req: Request, res: Response): Pro
 
 // A-9 G7 (docs/plans/GREYTHR_PARITY_EMPLOYEE_ADMIN.md) — begin
 export async function setPortalAccess(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await service.setPortalAccess(emp(req), req.body.enabled, req.body.reason, actor(req), actorMeta(req)));
+  sendMaybePending(res, await service.setPortalAccess(emp(req), req.body.enabled, req.body.reason, actor(req), actorMeta(req)));
 }
 // A-9 — end

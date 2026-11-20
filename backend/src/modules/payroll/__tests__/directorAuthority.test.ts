@@ -11,6 +11,7 @@ import { resolveAccess } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
 import { mailService } from "../../../integrations/mail";
 import { assignRole, listSecurityEvents, removeRole, setOverride } from "../../access/service";
+import { confirmDirectorChange } from "../../access/directorChanges";
 import { app, authHeader, cleanupEmployeeTestOrgMasters, cleanupFullTestEmployee, cleanupTestRole, createEmployeeTestOrgMasters, createFullTestEmployee, grantPermissions, loginAs, type TestOrgMasters } from "../../employee/__tests__/employeeTestHelpers";
 import { authorise, consume, decide, recordCompletedApproval, registerSubject, submit, unregisterSubjectForTests } from "../approvals";
 import { cleanupPayrollRowsBy, cleanupPayrollSubject, setDirectorChoices } from "./payrollTestHelpers";
@@ -570,7 +571,11 @@ describe("director authority", () => {
         await addRole(x.userId, "PAYROLL_APPROVER");
         expect((await resolveAccess(x.userId)).isSuperAdmin).toBe(true);
         const sa = await prisma.role.findUniqueOrThrow({ where: { code: "SUPER_ADMIN" } });
-        await prisma.userRole.delete({ where: { userId_roleId: { userId: x.userId, roleId: sa.id } } }); // raw: the service would take the marker with it
+        // raw: the service would take the marker with it (FIX-C2: through the test purge, as a Super Admin role row otherwise needs a confirmed director change)
+        await prisma.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe("SELECT set_config('app.audit_purge', 'test', true)");
+          await tx.userRole.delete({ where: { userId_roleId: { userId: x.userId, roleId: sa.id } } });
+        });
         const access = await resolveAccess(x.userId);
         expect(access.roleCodes).not.toContain("PAYROLL_APPROVER");
         expect(access.permissions.has("payroll.approve")).toBe(false);
@@ -585,7 +590,9 @@ describe("director authority", () => {
       extraUserIds.push(x.userId);
       try {
         await addRole(x.userId, "PAYROLL_ADMIN");
-        await removeRole(x.employeeId, "SUPER_ADMIN", await actorOf(p.a), meta(p.a));
+        // FIX-C2 (independent audit 2026-11-20): removing Super Admin is proposed by one director and applied when the other confirms.
+        const proposed = (await removeRole(x.employeeId, "SUPER_ADMIN", await actorOf(p.a), meta(p.a))) as { id: string };
+        await confirmDirectorChange(proposed.id, { userId: p.b.userId, employeeId: p.b.employeeId }, {});
         const codes = (await prisma.userRole.findMany({ where: { userId: x.userId }, include: { role: true } })).map((r) => r.role.code);
         expect(codes).not.toContain("PAYROLL_ADMIN");
         expect(codes).not.toContain("SUPER_ADMIN");

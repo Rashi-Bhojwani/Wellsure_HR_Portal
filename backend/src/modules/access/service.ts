@@ -6,7 +6,8 @@ import { writeAuditLog } from "../../lib/audit";
 import { buildEmployeeScopeWhere } from "../../lib/dataScope";
 import { resolveAccess, SUPER_ADMIN_ROLE_CODE } from "../../lib/permissions";
 import { prisma } from "../../lib/prisma";
-import { assertSuperAdminRemains } from "../../lib/superAdminGuard";
+import { assertSuperAdminRemains, isActiveSuperAdmin } from "../../lib/superAdminGuard";
+import { needsDirectorChange, proposeDirectorChange } from "./directorChanges";
 import { HttpError } from "../../middleware/errorHandler";
 import { getSocketServer } from "../../realtime/emit";
 import { notifyAccessChanged } from "../../lib/accessChanged";
@@ -308,7 +309,7 @@ export async function clearOverride(employeeId: string, key: string, input: { re
 
 // ── Role assignment (rule 6) ───────────────────────────────────────────
 
-export async function assignRole(employeeId: string, roleCode: string, actor: AccessActor, meta: ActorMeta) {
+export async function assignRole(employeeId: string, roleCode: string, actor: AccessActor, meta: ActorMeta, opts: { reason?: string; thirdDirector?: boolean } = {}) {
   requireSuperAdmin(actor, "assign roles");
   const { user } = await loadTargetUser(employeeId, actor);
   if (user.status === "DEACTIVATED") throw new HttpError(409, "This person's account is deactivated.", "DEACTIVATED");
@@ -316,6 +317,12 @@ export async function assignRole(employeeId: string, roleCode: string, actor: Ac
   if (!role) throw new HttpError(404, "Role not found.", "NOT_FOUND");
   const before = (await prisma.userRole.findMany({ where: { userId: user.id }, include: { role: true } })).map((ur) => ur.role.code).sort();
   if (before.includes(role.code)) return getEmployeeAccess(employeeId, actor);
+  // FIX-C2 (independent audit 2026-11-20): making a director, or changing a director's roles, is proposed here and applied when the other director confirms.
+  if (await needsDirectorChange(user.id, role.code)) {
+    if (role.code === DEVELOPER_ROLE_CODE && before.includes(SUPER_ADMIN_ROLE_CODE)) throw forbid("Nobody can be both a developer and a Super Admin: the developer is the one person who must not hold the owners' secrets.", "DEVELOPER_CEILING");
+    if (role.code === SUPER_ADMIN_ROLE_CODE && before.includes(DEVELOPER_ROLE_CODE)) throw forbid("Nobody can be both a developer and a Super Admin: the developer is the one person who must not hold the owners' secrets.", "DEVELOPER_CEILING");
+    return proposeDirectorChange({ action: role.code === SUPER_ADMIN_ROLE_CODE ? "GRANT_SUPER_ADMIN" : "ASSIGN_ROLE", targetUserId: user.id, roleCode: role.code === SUPER_ADMIN_ROLE_CODE ? null : role.code, reason: opts.reason ?? `Role ${role.code}`, thirdDirector: opts.thirdDirector }, actor, meta);
+  }
   // E2: appointing a manager is one operation wherever it starts — the
   // role, the cleared reporting line and the grantable check together.
   if (role.code === MANAGER_ROLE_CODE) {
@@ -350,12 +357,16 @@ export async function assignRole(employeeId: string, roleCode: string, actor: Ac
   return getEmployeeAccess(employeeId, actor);
 }
 
-export async function removeRole(employeeId: string, roleCode: string, actor: AccessActor, meta: ActorMeta) {
+export async function removeRole(employeeId: string, roleCode: string, actor: AccessActor, meta: ActorMeta, opts: { reason?: string } = {}) {
   requireSuperAdmin(actor, "remove roles");
   const { user } = await loadTargetUser(employeeId, actor);
   const userRole = await prisma.userRole.findFirst({ where: { userId: user.id, role: { code: roleCode } }, include: { role: true } });
   if (!userRole) throw new HttpError(404, "This person doesn't hold that role.", "NOT_FOUND");
   if (roleCode === SUPER_ADMIN_ROLE_CODE) await assertSuperAdminRemains(user.id); // rule 7
+  // FIX-C2 (independent audit 2026-11-20): removing director status, or a role from a director, waits for the other director.
+  if (await needsDirectorChange(user.id, roleCode)) {
+    return proposeDirectorChange({ action: roleCode === SUPER_ADMIN_ROLE_CODE ? "REVOKE_SUPER_ADMIN" : "REMOVE_ROLE", targetUserId: user.id, roleCode: roleCode === SUPER_ADMIN_ROLE_CODE ? null : roleCode, reason: opts.reason ?? `Remove role ${roleCode}` }, actor, meta);
+  }
   if (roleCode === MANAGER_ROLE_CODE) {
     // E2: their team has to go somewhere and they need a manager of their
     // own — both chosen in Manager Management.
@@ -434,6 +445,8 @@ export async function setPortalAccess(employeeId: string, enabled: boolean, reas
     throw new HttpError(409, enabled ? "Only a disabled account can be enabled." : "Only an active account can be disabled (an invited one has not signed in yet; a leaver's is already closed).", "WRONG_STATUS");
   }
   if (!enabled) await assertSuperAdminRemains(user.id); // never the last active director
+  // FIX-C2 (independent audit 2026-11-20): turning off a director's portal access takes away their director status in practice, so it waits for the other director.
+  if (!enabled && (await isActiveSuperAdmin(user.id))) return proposeDirectorChange({ action: "SUSPEND", targetUserId: user.id, reason }, actor, meta);
   await prisma.user.update({ where: { id: user.id }, data: { status: enabled ? "ACTIVE" : "SUSPENDED" } });
   if (!enabled) await revokeAllUserRefreshTokens(user.id);
   await writeAuditLog({ ...meta, action: enabled ? "user.portal_access.enabled" : "user.portal_access.disabled", entityType: "User", entityId: user.id, before: { status: user.status }, after: { status: enabled ? "ACTIVE" : "SUSPENDED", reason } });

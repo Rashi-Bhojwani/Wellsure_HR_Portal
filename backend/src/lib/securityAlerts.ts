@@ -169,3 +169,13 @@ export async function raiseBreakGlassAlert(a: BreakGlassAlert, opts: { mailIsDow
   getSocketServer()?.to(`role:${SUPER_ADMIN_ROLE_CODE}`).emit("security.event", { id: event.id });
   return { eventId: event.id, emailed, queued };
 }
+
+// FIX (independent audit 2026-11-20): a red security banner for the directors other than `targetUserId` (the actor), until one of them acknowledges it, and a live
+// nudge to their screens. Used by the two-director confirmations the audit fixes add. Carries no pay figure.
+export async function raiseSecurityEvent(input: { kind: string; targetUserId: string | null; summary: string; details?: Record<string, unknown> }): Promise<string> {
+  const { prisma } = await import("./prisma");
+  const { getSocketServer } = await import("../realtime/emit");
+  const row = await prisma.securityEvent.create({ data: { kind: input.kind, targetUserId: input.targetUserId, summary: input.summary, details: (input.details ?? {}) as object } });
+  getSocketServer()?.to("role:SUPER_ADMIN").emit("security.event", { id: row.id });
+  return row.id;
+}

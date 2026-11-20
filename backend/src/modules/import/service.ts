@@ -464,12 +464,23 @@ async function commitLeaveGrants(tx: Prisma.TransactionClient, rows: { data: Rec
   }
 }
 
+/** FIX-C3: the leave-grants import, run when a director confirms its change request, inside the confirmation's transaction. */
+export async function applyLeaveGrantsBatch(tx: Prisma.TransactionClient, batchId: string, meta: ActorMeta): Promise<{ committedRows: number }> {
+  const batch = await tx.importBatch.findUnique({ where: { id: batchId } });
+  if (!batch) throw new HttpError(404, "Import batch not found.", "NOT_FOUND");
+  if (batch.status === "COMMITTED") throw new HttpError(400, "This batch has already been committed.", "ALREADY_COMMITTED");
+  const rows = await tx.importStagingRow.findMany({ where: { batchId }, orderBy: { rowNumber: "asc" } });
+  await commitLeaveGrants(tx, rows.map((r) => ({ data: r.data as Record<string, unknown> })), meta);
+  await tx.importBatch.update({ where: { id: batchId }, data: { status: "COMMITTED", committedByUserId: meta.actorUserId, committedAt: new Date() } });
+  return { committedRows: rows.length };
+}
+
 export async function commitBatch(
   id: string,
   meta: ActorMeta,
   viewerPermissions: Set<string>,
   options?: { confirmText?: string },
-): Promise<{ committedRows: number }> {
+): Promise<{ committedRows: number; pendingConfirmation?: boolean; requestId?: string }> {
   const batch = await requireBatch(id);
   assertDatasetAllowed(ENUM_TO_DATASET[batch.dataset], viewerPermissions);
   if (batch.status === "COMMITTED") {
@@ -497,13 +508,22 @@ export async function commitBatch(
   const rows = await prisma.importStagingRow.findMany({ where: { batchId: id }, orderBy: { rowNumber: "asc" } });
   const rowInputs = rows.map((r) => ({ data: r.data as Record<string, unknown> }));
 
+  // FIX-C3 (independent audit 2026-11-20): an import that changes leave balances is a proposal. It needs leave.grant as well (HR Executive no longer holds it),
+  // and nothing is written until a director other than the proposer, and not one of the people it credits, confirms it (modules/leave/changeRequests.ts).
+  if (dataset === "leave-grants") {
+    if (!viewerPermissions.has("leave.grant")) throw new HttpError(403, "Missing permission: leave.grant", "FORBIDDEN");
+    const { proposeLeaveImport } = await import("../leave/changeRequests");
+    const pending = await proposeLeaveImport(id, rowInputs, meta);
+    return { committedRows: 0, pendingConfirmation: true, requestId: pending.id };
+  }
+
   await prisma.$transaction(
     async (tx) => {
       if (dataset === "org-masters") await commitOrgMasters(tx, rowInputs);
       else if (dataset === "employees") await commitEmployees(tx, rowInputs, meta);
       else if (dataset === "statutory") await commitStatutory(tx, rowInputs, meta);
       else if (dataset === "bank") await commitBank(tx, rowInputs, meta);
-      else await commitLeaveGrants(tx, rowInputs, meta);
+      else throw new HttpError(400, "Unknown dataset.", "VALIDATION_ERROR");
 
       await tx.importBatch.update({ where: { id }, data: { status: "COMMITTED", committedByUserId: meta.actorUserId, committedAt: new Date() } });
     },
