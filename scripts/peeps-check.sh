@@ -32,6 +32,7 @@ fi
 step() { echo; echo "== $1"; }
 step "lint (ESLint + check:tokens)"; npm run lint
 step "typecheck (backend, frontend, agent, infra)"; npm run typecheck
+step "repository guards (no real data; the guards' own tests)"; node --test scripts/__tests__/check-real-data.test.mjs scripts/__tests__/check-audit.test.mjs && node scripts/check-real-data.mjs # C4, M9 (audit 2026-11-20)
 
 backend=(); frontend=()
 for f in "${files[@]+"${files[@]}"}"; do

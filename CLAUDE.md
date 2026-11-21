@@ -35,6 +35,9 @@ working-conventions companion to both.
   `docs/plans/PHASE_5.md`) or as a detailed section in
   `docs/PROGRESS.md`. A new session must be able to pick up from the
   repo alone.
+- **Never commit real data** (audit C4, 2026-11-20): no greytHR or payroll export, bank sheet, punch log or other live-system file, and no real PAN,
+  Aadhaar, UAN, bank account or salary anywhere in the repository, history included. Use made-up fixtures; `node scripts/check-real-data.mjs` (run by CI
+  and `scripts/peeps-check.sh`) fails on export-like files and identifier-shaped values. Details: `docs/ops/README.md`, "Never commit real data".
 - At the end of every phase: tests green, migrations applied, seed data
   updated, `docs/PROGRESS.md` updated, `docs/GETTING_STARTED.md` updated
   if anything about setup, env vars, seeded accounts or everyday commands
