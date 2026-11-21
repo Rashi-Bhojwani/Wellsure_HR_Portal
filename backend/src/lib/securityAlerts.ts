@@ -179,3 +179,32 @@ export async function raiseSecurityEvent(input: { kind: string; targetUserId: st
   getSocketServer()?.to("role:SUPER_ADMIN").emit("security.event", { id: row.id });
   return row.id;
 }
+
+/**
+ * FIX-M6 (independent audit 2026-11-20): an alert to the OUTSIDE mailbox (SECURITY_ALERT_EMAIL) and to every director's personal address, for a director-on-director
+ * security action (resetting two-step sign-in, unlocking). A send that fails is queued and retried for 24 hours; the event row and the log line stand either way.
+ */
+export async function sendOutsideSecurityAlert(title: string, rows: Array<[string, string]>): Promise<{ emailed: string[]; queued: string[] }> {
+  const admins = await activeSuperAdmins();
+  const recipients = [...new Set([...(env.SECURITY_ALERT_EMAIL ? [env.SECURITY_ALERT_EMAIL] : []), ...admins.map((u) => u.employee.personal?.personalEmail).filter((e): e is string => Boolean(e))])];
+  logger.warn({ event: "security.director_action", title, rows }, "director-on-director security action");
+  const table = rows.map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0;color:#595959;vertical-align:top">${escapeHtml(k)}</td><td style="padding:4px 0">${escapeHtml(v)}</td></tr>`).join("");
+  const emailed: string[] = [];
+  const queued: string[] = [];
+  for (const to of recipients) {
+    const message: MailMessage = { to, subject: `[Security] ${title}`, html: emailLayout(title, `<p>Every director and the company's security mailbox receive this email.</p><table style="border-collapse:collapse;font-size:14px">${table}</table><p><strong>If you did not expect this, treat it as an incident.</strong></p>`) };
+    try {
+      await mailService.send(message);
+      emailed.push(to);
+    } catch (err) {
+      logger.error({ event: "security.director_action.alert_failed", to, err }, "security alert email failed");
+      try {
+        await securityAlertQueue().add("alert", message, SECURITY_ALERT_RETRY);
+        queued.push(to);
+      } catch (qerr) {
+        logger.error({ event: "security.director_action.alert_not_queued", to, err: qerr }, "security alert could not even be queued");
+      }
+    }
+  }
+  return { emailed, queued };
+}

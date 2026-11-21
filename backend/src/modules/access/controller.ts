@@ -45,10 +45,10 @@ export async function clearOverride(req: Request, res: Response): Promise<void> 
   res.status(200).json(await service.clearOverride(emp(req), req.params.key as string, req.body, actor(req), actorMeta(req)));
 }
 export async function resetTwoFactor(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await service.resetTwoFactor(emp(req), req.body.reason, actor(req), actorMeta(req)));
+  sendMaybePending(res, await service.resetTwoFactor(emp(req), req.body.reason, actor(req), actorMeta(req)));
 }
 export async function unlockAccount(req: Request, res: Response): Promise<void> {
-  res.status(200).json(await service.unlockAccount(emp(req), req.body.reason, actor(req), actorMeta(req)));
+  sendMaybePending(res, await service.unlockAccount(emp(req), req.body.reason, actor(req), actorMeta(req)));
 }
 export async function sendPasswordReset(req: Request, res: Response): Promise<void> {
   res.status(200).json(await service.sendPasswordReset(emp(req), req.body.reason, actor(req), actorMeta(req)));

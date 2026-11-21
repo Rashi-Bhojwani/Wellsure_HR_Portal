@@ -1079,6 +1079,9 @@ enum DirectorChangeAction {
   ASSIGN_ROLE
   REMOVE_ROLE
   SUSPEND
+  // FIX-M6: resetting a director's two-step sign-in, or unlocking a director, is a two-director act too.
+  RESET_2FA
+  UNLOCK
 }
 
 enum DirectorChangeStatus {

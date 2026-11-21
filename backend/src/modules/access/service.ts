@@ -417,6 +417,8 @@ async function tellTarget(userId: string, change: string, reason: string, actor:
 
 export async function resetTwoFactor(employeeId: string, reason: string, actor: AccessActor, meta: ActorMeta) {
   const user = await assertMaySecure(employeeId, actor);
+  // FIX-M6 (independent audit 2026-11-20): another director's two-step sign-in is reset only when a second director confirms it (and the outside mailbox is told).
+  if (await isActiveSuperAdmin(user.id)) return proposeDirectorChange({ action: "RESET_2FA", targetUserId: user.id, reason }, actor, meta);
   await adminResetTotp(user.id, { ...meta, reason });
   await tellTarget(user.id, "Your two-factor authentication was reset and you were signed out everywhere", reason, actor);
   return getEmployeeAccess(employeeId, actor);
@@ -424,6 +426,7 @@ export async function resetTwoFactor(employeeId: string, reason: string, actor: 
 
 export async function unlockAccount(employeeId: string, reason: string, actor: AccessActor, meta: ActorMeta) {
   const user = await assertMaySecure(employeeId, actor);
+  if (await isActiveSuperAdmin(user.id)) return proposeDirectorChange({ action: "UNLOCK", targetUserId: user.id, reason }, actor, meta); // FIX-M6
   await adminUnlock(user.id, { ...meta, reason });
   await tellTarget(user.id, "Your account was unlocked after failed sign-in attempts", reason, actor);
   return getEmployeeAccess(employeeId, actor);

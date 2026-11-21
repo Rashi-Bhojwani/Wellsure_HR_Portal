@@ -235,22 +235,26 @@ describe("E1.1 — loud break-glass, append-only audit, manager data scope", () 
 
   // ── In-app resets tell the person ─────────────────────────────────────
 
+  // FIX-M6 (independent audit 2026-11-20): changed test. On another director, unlock and two-step reset are now held for a second director (fixM6DirectorSecurity
+  // covers that); the notice to the person is checked here on an employee, where the director acts at once as before.
   it("an in-app sign-in reset emails the person it was done to, naming who did it; unlock needs a reason", async () => {
     const sent: Array<{ to: string; html: string }> = [];
     vi.spyOn(mailService, "send").mockImplementation(async (m) => {
       sent.push(m);
       return fakeReceipt(m.to);
     });
-    await prisma.user.update({ where: { id: p.sa2.userId }, data: { totpEnabled: true, failedLoginAttempts: 5, lockedUntil: new Date(Date.now() + 60_000) } });
-    expect((await api(tokens.sa).post(`/api/access/employees/${p.sa2.employeeId}/unlock`)).status).toBe(400);
-    expect((await api(tokens.sa).post(`/api/access/employees/${p.sa2.employeeId}/unlock`, { reason: "too many typos" })).status).toBe(200);
-    expect((await api(tokens.sa).post(`/api/access/employees/${p.sa2.employeeId}/reset-2fa`, { reason: "lost their phone" })).status).toBe(200);
-    const target = await emailOf(p.sa2.userId);
+    await prisma.user.update({ where: { id: p.report.userId }, data: { totpEnabled: true, failedLoginAttempts: 5, lockedUntil: new Date(Date.now() + 60_000) } });
+    expect((await api(tokens.sa).post(`/api/access/employees/${p.report.employeeId}/unlock`)).status).toBe(400);
+    expect((await api(tokens.sa).post(`/api/access/employees/${p.report.employeeId}/unlock`, { reason: "too many typos" })).status).toBe(200);
+    expect((await api(tokens.sa).post(`/api/access/employees/${p.report.employeeId}/reset-2fa`, { reason: "lost their phone" })).status).toBe(200);
+    const target = await emailOf(p.report.userId);
     const notices = sent.filter((m) => m.to === target);
     expect(notices).toHaveLength(2);
     expect(notices.every((m) => m.html.includes(p.sa.employeeCode))).toBe(true);
-    const unlockLog = await prisma.auditLog.findFirstOrThrow({ where: { action: "auth.unlocked_by_admin", entityId: p.sa2.userId, actorUserId: p.sa.userId } });
+    const unlockLog = await prisma.auditLog.findFirstOrThrow({ where: { action: "auth.unlocked_by_admin", entityId: p.report.userId, actorUserId: p.sa.userId } });
     expect((unlockLog.after as { reason: string }).reason).toBe("too many typos");
+    const onDirector = await api(tokens.sa).post(`/api/access/employees/${p.sa2.employeeId}/unlock`, { reason: "too many typos" });
+    expect(onDirector.status).toBe(202);
   });
 
   // ── Company-wide data no longer reaches a manager ─────────────────────

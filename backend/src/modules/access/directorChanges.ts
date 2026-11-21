@@ -7,7 +7,7 @@ import { activeDirectors, isDirector, requireDirector, requireDirectorTwoFactor 
 import { notifyDirectors } from "../../lib/notifyDirectors";
 import { SUPER_ADMIN_ROLE_CODE } from "../../lib/permissions";
 import { prisma } from "../../lib/prisma";
-import { raiseSecurityEvent } from "../../lib/securityAlerts";
+import { raiseSecurityEvent, sendOutsideSecurityAlert } from "../../lib/securityAlerts";
 import { assertSuperAdminRemains } from "../../lib/superAdminGuard";
 import { HttpError } from "../../middleware/errorHandler";
 import { disconnectUserSockets } from "../../realtime/emit";
@@ -34,6 +34,8 @@ const ACTION_TEXT: Record<DirectorChangeAction, string> = {
   ASSIGN_ROLE: "give a role to the director",
   REMOVE_ROLE: "take a role from the director",
   SUSPEND: "turn off portal access for the director",
+  RESET_2FA: "reset two-step sign-in for the director",
+  UNLOCK: "unlock the sign-in of the director",
 };
 
 async function labelOf(userId: string): Promise<string> {
@@ -67,6 +69,7 @@ export async function proposeDirectorChange(
   } else {
     if (!held.includes(SUPER_ADMIN_ROLE_CODE)) throw new HttpError(409, "This person is not a director.", "NOT_DIRECTOR");
     if (input.action === "REVOKE_SUPER_ADMIN" || input.action === "SUSPEND") await assertSuperAdminRemains(target.id);
+    if ((input.action === "RESET_2FA" || input.action === "UNLOCK") && target.id === actor.userId) throw new HttpError(403, "Use your own account security settings for this.", "SELF");
     if (input.action === "ASSIGN_ROLE" || input.action === "REMOVE_ROLE") {
       if (!input.roleCode || input.roleCode === SUPER_ADMIN_ROLE_CODE) throw new HttpError(400, "Name the role.", "VALIDATION_ERROR");
       if (!(await prisma.role.findUnique({ where: { code: input.roleCode } }))) throw new HttpError(404, "Role not found.", "NOT_FOUND");
@@ -84,6 +87,8 @@ export async function proposeDirectorChange(
   await writeAuditLog({ actorUserId: actor.userId, ipAddress: meta.ipAddress ?? null, userAgent: meta.userAgent ?? null, action: "director.role_change.proposed", entityType: "DirectorRoleChange", entityId: row.id, after: { action: input.action, targetUserId: target.id, roleCode: input.roleCode ?? null, reason: input.reason } });
   await notifyDirectors({ type: "director.role_change_pending", title: "A change to who is a director waits for confirmation", body: `A director proposed to ${text}. It takes effect only when ${directors.length >= 2 && input.action === "GRANT_SUPER_ADMIN" ? "every other director confirms" : "the other director confirms"}.`, link: "/admin/admin-tools/confirmations", payload: { changeId: row.id } });
   await raiseSecurityEvent({ kind: "director.role_change_proposed", targetUserId: actor.userId, summary: `A director proposed to ${text}.`, details: { changeId: row.id, action: input.action } });
+  // FIX-M6: a director-on-director security action always alerts the outside mailbox, when proposed and when applied.
+  if (input.action === "RESET_2FA" || input.action === "UNLOCK") await sendOutsideSecurityAlert(`A director proposed to ${ACTION_TEXT[input.action]} ${who}`, [["Change", text], ["Reason", input.reason], ["Status", "Waits for the other director's confirmation"]]);
   return { pendingConfirmation: true as const, id: row.id, action: input.action };
 }
 
@@ -124,11 +129,12 @@ export async function confirmDirectorChange(id: string, actor: DirectorChangeAct
       await tx.userRole.upsert({ where: { userId_roleId: { userId: target.id, roleId: (await role(c.roleCode!)).id } }, create: { userId: target.id, roleId: (await role(c.roleCode!)).id, assignedByUserId: actor.userId }, update: {} });
     } else if (c.action === "REMOVE_ROLE") {
       await tx.userRole.deleteMany({ where: { userId: target.id, role: { code: c.roleCode! } } });
-    } else {
+    } else if (c.action === "SUSPEND") {
       const others = await tx.userRole.count({ where: { userId: { not: target.id }, role: { code: SUPER_ADMIN_ROLE_CODE }, user: { status: "ACTIVE" } } });
       if (others === 0) throw new HttpError(409, "This is the last active director.", "LAST_SUPER_ADMIN");
       await tx.user.update({ where: { id: target.id }, data: { status: "SUSPENDED" } });
     }
+    // RESET_2FA and UNLOCK are carried out after the transaction (they write through the auth service), below.
     return { applied: true as const, c, target };
   });
   const who = await labelOf(outcome.c.targetUserId);
@@ -136,6 +142,13 @@ export async function confirmDirectorChange(id: string, actor: DirectorChangeAct
   await writeAuditLog({ actorUserId: actor.userId, ipAddress: meta.ipAddress ?? null, userAgent: meta.userAgent ?? null, action: outcome.applied ? "director.role_change.applied" : "director.role_change.confirmed", entityType: "DirectorRoleChange", entityId: id, after: { action: outcome.c.action, targetUserId: outcome.c.targetUserId, roleCode: outcome.c.roleCode, proposedBy: outcome.c.proposedByUserId } });
   if (!outcome.applied) return { applied: false as const, id, waitingFor: "every other director" };
   if (outcome.c.action === "SUSPEND") await revokeAllUserRefreshTokens(outcome.target.id);
+  if (outcome.c.action === "RESET_2FA" || outcome.c.action === "UNLOCK") {
+    const { adminResetTotp, adminUnlock } = await import("../auth/service");
+    const securityMeta = { actorUserId: actor.userId, ipAddress: meta.ipAddress ?? null, userAgent: meta.userAgent ?? null, reason: outcome.c.reason };
+    if (outcome.c.action === "RESET_2FA") await adminResetTotp(outcome.target.id, securityMeta as never);
+    else await adminUnlock(outcome.target.id, securityMeta as never);
+    await sendOutsideSecurityAlert(`A director's ${outcome.c.action === "RESET_2FA" ? "two-step sign-in was reset" : "sign-in was unlocked"} (confirmed by a second director)`, [["Change", text], ["Reason", outcome.c.reason]]);
+  }
   disconnectUserSockets(outcome.target.employeeId); // FIX-M2: any change to a director's roles or access reconnects their screens
   await notifyAccessChanged([outcome.target]);
   await notifyDirectors({ type: "director.role_change_applied", title: "A change to who is a director took effect", body: `Confirmed by a second director: ${text}.`, link: "/admin/admin-tools/confirmations", payload: { changeId: id } });

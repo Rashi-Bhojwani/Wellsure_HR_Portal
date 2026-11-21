@@ -313,8 +313,8 @@ describe("Roles & permissions (E1)", () => {
       for (const action of ["unlock", "reset-2fa", "password-reset"]) expect((await api(tokens.hrAdmin).post(`/api/access/employees/${people.employee.employeeId}/${action}`, { reason: "hr tries" })).status, action).toBe(403);
       expect((await api(tokens.hrAdmin).post(`/api/access/employees/${people.sa.employeeId}/reset-2fa`, { reason: "try on SA" })).status).toBe(403);
       expect((await api(tokens.sa).post(`/api/access/employees/${people.sa.employeeId}/reset-2fa`, { reason: "on myself" })).body.error.code).toBe("SELF");
-      // Recovery step 1: another Super Admin can.
-      expect((await api(tokens.sa).post(`/api/access/employees/${people.sa2.employeeId}/unlock`, { reason: "locked out after typos" })).status).toBe(200);
+      // Recovery step 1: another Super Admin can propose it; FIX-M6 (independent audit 2026-11-20): it takes effect when a second director confirms it (202 held).
+      expect((await api(tokens.sa).post(`/api/access/employees/${people.sa2.employeeId}/unlock`, { reason: "locked out after typos" })).status).toBe(202);
       // Outside the manager's TEAM scope: 404, never confirming the person exists.
       expect((await api(tokens.manager).post(`/api/access/employees/${people.employee.employeeId}/unlock`, { reason: "should not work" })).status).toBe(404);
     });
