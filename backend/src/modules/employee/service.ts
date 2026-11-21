@@ -1,5 +1,7 @@
 import { maskMobile } from "./grid"; // A-9
 import { Prisma } from "@prisma/client";
+import { env } from "../../config/env";
+import { reservedEmployeeCodeMessage } from "../../lib/demoGuard";
 import { prisma } from "../../lib/prisma";
 import { writeAuditLog } from "../../lib/audit";
 import { resolveAttendanceDefaults } from "../../lib/attendanceSettings";
@@ -61,8 +63,15 @@ async function runConflictSafe<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+// FIX-M4 (independent audit 2026-11-20): the DEMO prefix is reserved outside development (lib/demoGuard.ts).
+export function assertEmployeeCodeNotReserved(employeeCode: string, appEnv: string = env.APP_ENV): void {
+  const reserved = reservedEmployeeCodeMessage(employeeCode, appEnv);
+  if (reserved) throw new HttpError(400, reserved, "EMPLOYEE_CODE_RESERVED");
+}
+
 // The employee number is the login ID, so it is unique ignoring case and surrounding spaces (auth/loginId.ts; the database index agrees).
 async function assertEmployeeCodeAvailable(employeeCode: string, exceptEmployeeId?: string): Promise<void> {
+  assertEmployeeCodeNotReserved(employeeCode);
   const existing = await loginIdTaken(employeeCode, exceptEmployeeId);
   if (existing) {
     const sameText = existing.employeeCode === employeeCode.trim();
@@ -145,6 +154,7 @@ export async function createEmployeeInTx(
   opts: { deviceMappingValidTo?: Date } = {},
 ): Promise<{ employee: { id: string }; userId: string }> {
   const { official, personal, statutory, bank } = input;
+  assertEmployeeCodeNotReserved(official.employeeCode); // FIX-M4: every creator (wizard, import, hiring conversion) passes here
 
   const employeeRow = await tx.employee.create({
     data: {

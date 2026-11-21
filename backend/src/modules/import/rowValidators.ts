@@ -1,3 +1,5 @@
+import { env } from "../../config/env";
+import { reservedEmployeeCodeMessage } from "../../lib/demoGuard";
 import { personalEmailAllowed } from "../employee/validators";
 import { prisma } from "../../lib/prisma";
 import { leaveTypeIdFor } from "../leave/leaveTypeRoles";
@@ -268,7 +270,9 @@ export function validateEmployeeRow(row: ParsedRow, refs: ReferenceData, tracker
   }
   if (employeeCode) {
     const codeLc = employeeCode.toLowerCase();
-    if (refs.employeeCodeToId.has(codeLc)) errors.push(`Employee Code "${employeeCode}" is already in use.`);
+    const reserved = reservedEmployeeCodeMessage(employeeCode, env.APP_ENV); // FIX-M4
+    if (reserved) errors.push(reserved);
+    else if (refs.employeeCodeToId.has(codeLc)) errors.push(`Employee Code "${employeeCode}" is already in use.`);
     else if (tracker.employeeCodes.has(codeLc)) errors.push(`Duplicate Employee Code "${employeeCode}" elsewhere in this file.`);
     else tracker.employeeCodes.add(codeLc);
   }
