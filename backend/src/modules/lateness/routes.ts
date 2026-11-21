@@ -25,6 +25,9 @@ latenessRouter.post("/waivers/:id/withdraw", validate({ params: idParams }), asy
 latenessRouter.get("/waivers", validate({ query: service.listQuery }), async (req, res) => send(res, 200, { waivers: await service.listWaivers(actor(req), ((req.query as { status?: "PENDING" }).status ?? "PENDING")) }));
 latenessRouter.post("/waivers/:id/approve", validate({ params: idParams }), async (req, res) => send(res, 200, await service.approveWaiver(actor(req), req.params.id as string)));
 latenessRouter.post("/waivers/:id/reject", validate({ params: idParams, body: service.rejectBody }), async (req, res) => send(res, 200, await service.rejectWaiver(actor(req), req.params.id as string, req.body.note)));
+// FIX-M8 (independent audit 2026-11-20): a director confirms or turns down a waiver HR approved (checked in the service).
+latenessRouter.post("/waivers/:id/confirm", validate({ params: idParams }), async (req, res) => send(res, 200, await service.confirmWaiver(actor(req), req.params.id as string, true, null)));
+latenessRouter.post("/waivers/:id/director-reject", validate({ params: idParams, body: service.rejectBody }), async (req, res) => send(res, 200, await service.confirmWaiver(actor(req), req.params.id as string, false, req.body.note)));
 latenessRouter.get("/settings", async (req, res) => send(res, 200, await settings.list(actor(req))));
 latenessRouter.post("/settings/:key/proposals", validate({ params: keyParams, body: settings.proposeBody }), async (req, res) => send(res, 201, await settings.propose(req.params.key as string, req.body, actor(req))));
 latenessRouter.post("/settings/proposals/:id/confirm", validate({ params: idParams }), async (req, res) => send(res, 200, await settings.confirm(req.params.id as string, actor(req))));

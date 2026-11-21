@@ -6408,6 +6408,11 @@ model LateWaiver {
   decidedAt         DateTime? @map("decided_at") @db.Timestamptz(3)
   decisionNote      String?   @map("decision_note")
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  // FIX-BEGIN M8 (independent audit 2026-11-20): with "lateness waivers need a director's confirmation" on (the default), HR's approval sets HR_APPROVED and
+  // records who approved; a director confirms it (APPROVED, decidedBy = the director).
+  hrApprovedByUserId String?  @map("hr_approved_by_user_id")
+  hrApprovedAt       DateTime? @map("hr_approved_at") @db.Timestamptz(3)
+  // FIX-END M8
 
   @@index([employeeId, date])
   @@index([status])

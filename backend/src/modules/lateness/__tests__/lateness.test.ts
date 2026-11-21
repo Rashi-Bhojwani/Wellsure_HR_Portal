@@ -272,12 +272,18 @@ describe("lateness rule against the database", () => {
     });
     it("GOLDEN approval returns the allowance: the 4th arrival becomes the 3rd (no cut), the 5th keeps the higher-of", async () => {
       expect((await api("hrx").post(`/waivers/${waiverId}/approve`)).status).toBe(403);
-      expect((await api("hr2").post(`/waivers/${waiverId}/approve`)).status).toBe(200);
+      const hrApproved = await api("hr2").post(`/waivers/${waiverId}/approve`);
+      expect([hrApproved.status, hrApproved.body.status]).toEqual([200, "HR_APPROVED"]);
+      // FIX-M8 (independent audit 2026-11-20): changed test. With "lateness waivers need a director's confirmation" on (the default), HR's approval waits for a
+      // director; nothing changes until d1 confirms it.
+      expect(await lop(p.emp, "2026-10-13", "2026-10-15")).toEqual({ "2026-10-13": "0", "2026-10-14": "0.5", "2026-10-15": "0.5" });
+      expect((await api("hr2").post(`/waivers/${waiverId}/confirm`)).status).toBe(403);
+      expect((await api("d1").post(`/waivers/${waiverId}/confirm`)).status).toBe(200);
       expect(await lop(p.emp, "2026-10-13", "2026-10-15")).toEqual({ "2026-10-13": "0", "2026-10-14": "0", "2026-10-15": "0.5" });
       const mine = (await api("emp").get("/mine?month=2026-10")).body.me;
       expect(mine.arrivals.find((a: { date: string }) => a.date === "2026-10-08")).toMatchObject({ consequence: { kind: "WAIVED" }, waiver: { status: "APPROVED" } });
       expect(mine.allowances[0]).toMatchObject({ used: 3, left: 0 });
-      expect(await prisma.auditLog.count({ where: { entityId: waiverId, action: { startsWith: "attendance.lateness.waiver." } } })).toBe(2);
+      expect(await prisma.auditLog.count({ where: { entityId: waiverId, action: { startsWith: "attendance.lateness.waiver." } } })).toBe(3); // FIX-M8: requested, HR-approved, director-confirmed
       expect(await prisma.notification.count({ where: { type: "lateness.waiver.approved", userId: { in: [p.emp.userId, p.mgr.userId] } } })).toBe(2);
       expect((await api("hr").post(`/waivers/${waiverId}/reject`, { note: "changed mind" })).body.error.code).toBe("ALREADY_DECIDED");
     });
@@ -325,6 +331,7 @@ describe("lateness rule against the database", () => {
       expect(again.rows.filter((r: { employeeId: string }) => r.employeeId === p.emp.employeeId).map((r: { status: string }) => r.status)).toEqual(["POSTED", "POSTED"]);
       const w = await api("mgr").post("/waivers", { employeeId: p.emp.employeeId, date: "2026-11-03", reason: "Client visit first" });
       await api("hr").post(`/waivers/${w.body.id}/approve`);
+      await api("d2").post(`/waivers/${w.body.id}/confirm`); // FIX-M8: changed test: the director's confirmation makes it take effect
       const after = (await api("d1").get("/penalties?month=2026-11")).body;
       expect(after.toCancel.map((c: { sourceRef: string }) => c.sourceRef)).toEqual([adj[0]!.sourceRef]);
       await api("d1").post("/penalties/post", { month: "2026-11", fingerprint: after.fingerprint });

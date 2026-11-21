@@ -112,6 +112,8 @@ describe("lateness: the follow-up recompute goes through the job queue and a rea
     const asked = await lateApi("mgr").post("/waivers", { employeeId: p.emp.employeeId, date: "2026-12-01", reason: "Device was down" });
     expect(asked.status, JSON.stringify(asked.body)).toBe(201);
     expect((await lateApi("hr").post(`/waivers/${asked.body.id}/approve`)).status).toBe(200);
+    // FIX-M8 (independent audit 2026-11-20): changed test. HR's approval waits for a director (the default); the director's confirmation is the approval.
+    expect((await lateApi("d1").post(`/waivers/${asked.body.id}/confirm`)).status).toBe(200);
     expect(await lopOn("2026-12-04")).toBe("0"); // approval recomputes the rest of the month inline
     await drain(); // and any job the recompute itself queued
     expect(await lopOn("2026-12-04")).toBe("0");

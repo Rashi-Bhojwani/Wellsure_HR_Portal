@@ -5,20 +5,34 @@ import * as api from "../../../api/lateness";
 import { apiErrorMessage } from "../../../lib/apiError";
 import { formatDate } from "../../../lib/dates";
 import { space } from "../../../theme/tokens";
+import { useAuth } from "../../../hooks/useAuth";
 import { ConfirmModal, DataTable, EmptyState, PageHeader, Panel, StatusChip, toast, useIsPhone } from "../../../ui";
 
 // Lateness rule (docs/plans/LATE_CHECKLIST.md §5): HR decides the waivers managers ask for (never one they asked for, never their own arrival). No pay figures here.
 export function LatenessWaiversPage() {
   const phone = useIsPhone();
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState<"PENDING" | "APPROVED" | "REJECTED">("PENDING");
+  const [status, setStatus] = useState<"PENDING" | "HR_APPROVED" | "APPROVED" | "REJECTED">("PENDING");
+  const { user } = useAuth();
+  const isDirector = Boolean(user?.roleCodes.includes("SUPER_ADMIN"));
   const [rejecting, setRejecting] = useState<api.WaiverRow | null>(null);
   const [note, setNote] = useState("");
   const q = useQuery({ queryKey: ["lateness", "waivers", status], queryFn: () => api.listWaivers(status) });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["lateness"] });
-  const approve = useMutation({ mutationFn: api.approveWaiver, onSuccess: () => { toast.success("Waived. The arrival has no consequence and its allowance is back."); refresh(); }, onError: (e) => toast.error(apiErrorMessage(e, "Could not approve it.")) });
-  const reject = useMutation({ mutationFn: () => api.rejectWaiver(rejecting!.id, note.trim()), onSuccess: () => { toast.success("Not waived. The manager and the employee are told why."); setRejecting(null); setNote(""); refresh(); }, onError: (e) => toast.error(apiErrorMessage(e, "Could not record it.")) });
+  const approve = useMutation({ mutationFn: api.approveWaiver, onSuccess: (r: { status?: string }) => { toast.success(r?.status === "HR_APPROVED" ? "Approved. It takes effect when a director confirms it." : "Waived. The arrival has no consequence and its allowance is back."); refresh(); }, onError: (e) => toast.error(apiErrorMessage(e, "Could not approve it.")) });
+  const confirm = useMutation({ mutationFn: api.confirmWaiver, onSuccess: () => { toast.success("Confirmed. The arrival has no consequence and its allowance is back."); refresh(); }, onError: (e) => toast.error(apiErrorMessage(e, "Could not confirm it.")) });
+  const reject = useMutation({ mutationFn: () => (rejecting!.status === "HR_APPROVED" ? api.directorRejectWaiver : api.rejectWaiver)(rejecting!.id, note.trim()), onSuccess: () => { toast.success("Not waived. The manager and the employee are told why."); setRejecting(null); setNote(""); refresh(); }, onError: (e) => toast.error(apiErrorMessage(e, "Could not record it.")) });
   const actions = (r: api.WaiverRow) =>
+    r.status === "HR_APPROVED" ? (
+      isDirector ? (
+        <div style={{ display: "flex", gap: space[2], flexWrap: "wrap", justifyContent: phone ? "stretch" : "flex-end" }}>
+          <Button danger block={phone} onClick={() => setRejecting(r)} aria-label={`Turn down the waiver for ${r.fullName} on ${r.date}`}>Turn down</Button>
+          <Button type="primary" block={phone} loading={confirm.isPending && confirm.variables === r.id} onClick={() => confirm.mutate(r.id)} aria-label={`Confirm the waiver for ${r.fullName} on ${r.date}`}>Confirm</Button>
+        </div>
+      ) : (
+        <StatusChip tone="warning">Waits for a director</StatusChip>
+      )
+    ) :
     r.status === "PENDING" &&
     (r.mine ? (
       <StatusChip tone="neutral">Someone else in HR decides</StatusChip>
@@ -30,7 +44,7 @@ export function LatenessWaiversPage() {
     ));
   return (
     <>
-      <PageHeader title="Lateness waivers" subtitle="Managers ask to waive one late arrival with a reason. A waived arrival has no consequence and gives back any allowance it used." actions={<Segmented value={status} onChange={(x) => setStatus(x as typeof status)} options={[{ value: "PENDING", label: "Waiting" }, { value: "APPROVED", label: "Waived" }, { value: "REJECTED", label: "Not waived" }]} aria-label="Which requests" />} />
+      <PageHeader title="Lateness waivers" subtitle="Managers ask to waive one late arrival with a reason. A waived arrival has no consequence and gives back any allowance it used." actions={<Segmented value={status} onChange={(x) => setStatus(x as typeof status)} options={[{ value: "PENDING", label: "Waiting" }, { value: "HR_APPROVED", label: "For a director" }, { value: "APPROVED", label: "Waived" }, { value: "REJECTED", label: "Not waived" }]} aria-label="Which requests" />} />
       <Panel>
         <DataTable<api.WaiverRow>
           rowKey="id"
