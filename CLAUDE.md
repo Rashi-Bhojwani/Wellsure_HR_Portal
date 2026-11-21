@@ -123,6 +123,10 @@ assuming:
   selected by env — write against the interface, not the AWS SDK directly.
 - Every state-changing admin action that spec §9 calls out gets an
   append-only audit log entry.
+- **Migration order (audit L5, 2026-11-20).** Prisma applies migration folders in name order, so the 26 `peeps_*` folders run after every dated
+  folder and the `fix_*` folders (independent audit fixes) run between them. Do not rename any of them. A new migration must not depend on a table a
+  `peeps_*` migration creates unless its folder name sorts after the peeps ones (for example `peeps_zz_...` or a `zz_` prefix); otherwise a fresh
+  database applies it before the table exists. Check with a fresh database and an upgrade from the previous migration.
 - **Test cleanup is schema-driven** (`backend/src/lib/__tests__/cleanup.ts`):
   delete fixtures with `deleteEmployeesAndDependents` /
   `deleteWithDependents` (or the helpers built on them), never a

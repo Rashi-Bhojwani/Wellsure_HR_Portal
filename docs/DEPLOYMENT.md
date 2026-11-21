@@ -54,6 +54,16 @@ even run. The test `lib/__tests__/dbRoles.test.ts` proves it, including that the
 Recorded decision: there is no third "owner" role distinct from the master user (fewer credentials to hold; the master user's secret is
 the migrate task's alone).
 
+### Migration order (independent audit L5, 2026-11-20)
+
+The migrate task runs `prisma migrate deploy`, which applies the folders in `backend/prisma/migrations` in name order. The 26 `peeps_*` folders therefore
+run after every dated folder, and the `fix_*` folders (the independent-audit fixes, 2026-11-20) run after the dated ones and before `peeps_*`. A fresh
+database and an upgrade from the previous migration both apply cleanly with no drift today. **Never rename a migration folder** (a renamed folder is a new,
+unapplied migration on every existing database). A new migration must not depend on a table a `peeps_*` migration creates unless its folder name sorts after
+the peeps ones; before merging one, apply all migrations to a scratch database from empty and from the previous migration, and run `npm run db:drift`.
+The `fix_*` migrations also tighten the app role: `leave_ledger` joins the append-only tables (UPDATE, DELETE and TRUNCATE revoked), and four new decision
+tables keep UPDATE only (their triggers allow one decision each).
+
 ## Field encryption keys, and how to rotate them [A]
 
 Bank account, PAN, Aadhaar, UAN and 2FA secrets are AES-256-GCM encrypted by `encryptField`/`decryptField`. The keys:
