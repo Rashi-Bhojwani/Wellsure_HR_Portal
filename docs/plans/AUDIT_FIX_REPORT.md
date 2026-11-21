@@ -11,12 +11,12 @@ permission checks on every changed route, and a record of every changed test wit
 
 | ID | Finding (short) | Status | Commit(s) | Test that reproduces it | Mutation |
 |---|---|---|---|---|---|
-| C1 | HR takes over any account via personal email + forgot password | **Fixed** | `d7c7196`, `b4233a6`, `789941c` | `backend/src/modules/employee/__tests__/fixC1AccountTakeover.test.ts` | 6 caught |
+| C1 | HR takes over any account via personal email + forgot password | **Fixed** | `d7c7196`, `b4233a6`, `789941c`, `3466f8e` | `backend/src/modules/employee/__tests__/fixC1AccountTakeover.test.ts` | 7 caught |
 | C2 | One director alone makes or removes a director | **Fixed** | `cbc1875`, `b4233a6` | `backend/src/modules/access/__tests__/fixC2DirectorChanges.test.ts` | 4 caught |
 | C3 | HR Executive / Developer grant themselves paid leave | **Fixed** | `cbc1875`, `b4233a6`, `ba191ce` | `backend/src/modules/leave/__tests__/fixC3LeaveChanges.test.ts`, `backend/src/modules/access/__tests__/fixC3DeveloperSweep.test.ts` | 7 caught |
 | C4 | Real-looking payroll, bank and punch files in git | **Guarded; history not rewritten (as instructed)** | `7f80175` | `scripts/__tests__/check-real-data.test.mjs` | 3 caught |
 | H1 | Refresh token in the API log | **Fixed** | `7cdad24` | `backend/src/lib/__tests__/fixH1RequestLog.test.ts`; plus a scan of the full-suite log (§4) | 2 caught |
-| H2 | One office IP locks out the whole office | **Fixed** | `929eb3c`, `b4233a6` | `backend/src/modules/auth/__tests__/fixH2OfficeLockout.test.ts` | 4 caught |
+| H2 | One office IP locks out the whole office | **Fixed** (corrected in `abe6b50`, see §5) | `929eb3c`, `b4233a6`, `abe6b50`, `3466f8e` | `backend/src/modules/auth/__tests__/fixH2OfficeLockout.test.ts`; `backend/src/middleware/__tests__/trustProxy.test.ts` | 5 caught |
 | H3 | `leave_ledger` not append-only in the database | **Fixed** | `c59faeb` | `backend/src/modules/leave/__tests__/fixH3LedgerAppendOnly.test.ts` | 2 caught |
 | H4 | Two-director rule optional; own pay changeable | **Fixed** | `b818d19`, `b4233a6` | `backend/src/modules/payroll/__tests__/fixH4SingleDirector.test.ts` | 5 caught |
 | H5 | Developer reads personal and bank details through Import | **Fixed** | `cbc1875` | `fixC3DeveloperSweep.test.ts` ("H5: the Developer reads no import batch…") | with C3 |
@@ -25,7 +25,7 @@ permission checks on every changed route, and a record of every changed test wit
 | M2 | Suspended user's socket stays connected | **Fixed** | `33146b0` | `backend/src/realtime/__tests__/fixM2Disconnect.test.ts` | 2 caught |
 | M3 | Redis down: `/ready` and sign-in hang | **Fixed** | `d925427` | `backend/src/lib/__tests__/fixM3RedisDown.test.ts` | 3 caught |
 | M4 | A `DEMO` employee number stops production | **Fixed** | `57f49dd` | `backend/src/lib/__tests__/fixM4DemoPrefix.test.ts` | 3 caught |
-| M5 | PT / LWF Not set: payroll deducts nothing instead of refusing | **Fixed** | `c567cdf`, `6929582`, `276805e` | `backend/src/modules/payroll/__tests__/fixM5StatutoryAnswers.test.ts`; `payslipNotSet.test.ts` (run refused) | 5 caught |
+| M5 | PT / LWF Not set: payroll deducts nothing instead of refusing | **Fixed** | `c567cdf`, `6929582`, `276805e`, `171a559` | `backend/src/modules/payroll/__tests__/fixM5StatutoryAnswers.test.ts`; `payslipNotSet.test.ts` (run refused) | 5 caught |
 | M6 | One director resets / unlocks the other alone | **Fixed** | `f3e7fb5`, `30f7c48` | `backend/src/modules/access/__tests__/fixM6DirectorSecurity.test.ts` | 2 caught |
 | M7 | Developer changes attendance policy, rosters, processing | **Fixed** | `cbc1875` | `fixC3DeveloperSweep.test.ts` (every write route) | with C3 |
 | M8 | Lateness waivers decided by HR alone | **Fixed** | `72ef064` | `backend/src/modules/lateness/__tests__/fixM8WaiverDirector.test.ts` | 3 caught |
@@ -45,7 +45,7 @@ permission checks on every changed route, and a record of every changed test wit
 | T1 | Tests lock in "a director may change their own pay" | **Fixed** (tests now assert the two-director rule) | `b818d19` | `fixH4SingleDirector.test.ts`; changed tests listed | with H4 |
 | T2 | No tests behind C1, C2, C3, H3 | **Fixed** | as C1, C2, C3, H3 | the four test files above | — |
 
-Mutation totals: 68 mutations, 67 caught. The one not caught (`INT-onpanel`) removes a second, redundant check in recruitment: every read already goes
+Mutation totals: 70 mutations, 69 caught. The one not caught (`INT-onpanel`) removes a second, redundant check in recruitment: every read already goes
 through `interviewWhere`, whose own mutation (`INT-list-scope`) is caught. It is defence in depth, not a gap.
 
 ### Extra work the fix block asked for
@@ -57,6 +57,16 @@ through `interviewWhere`, whose own mutation (`INT-list-scope`) is caught. It is
 | Email and notification templates: pay values reaching anyone not entitled | **None found.** Every path reviewed (payslip delivery, director notices, report subscriptions, mass email, payroll socket events). A new test drives a month to delivered payslips and finds no figure in any mail or notification; payroll notices reach only directors or the payee | `f870889` | `backend/src/modules/payroll/__tests__/fixPayNoticesNoFigures.test.ts` |
 | `seed:demo-company` on a fresh database | **Did not work; fixed.** It failed from about the 12th of each month (the paid settlement went negative). This predates the fixes: the audited commit fails the same way today. Also fixed: the demo answers "Applies" for PT and LWF | `276805e` | CI demo tests; fresh-database run (§4) |
 | Permission matrix and Developer-403 sweep over every route | Done. Found the Developer firewall refusing five of the person's **own** acts (now allowed); the 14 new routes classified | `ba191ce` | `peeps/__tests__/permissionMatrix.test.ts`, `managers/__tests__/routeInventory.test.ts`, `fixC3DeveloperSweep.test.ts` |
+
+### Found by the final checks, and fixed
+
+| Found by | What | Commit |
+|---|---|---|
+| Full backend suite (339 files) | Seven tests in files the phase checks did not run asserted the behaviour before C1, C2 and C3; updated, each with its reason (`CHANGED_TESTS.md`) | `abe6b50` |
+| Full backend suite (`trustProxy.test.ts`) | **My H2 fix had opened a hole:** an address over its limit still let in any number with no failures of its own, so a password spray (one guess per number) was never limited. Removed (§5) | `abe6b50` |
+| Browser walk | **System Settings, Security could not be saved at all:** the API refused any save carrying the sign-in limit (the form always sends it), and a refused save was half-applied. The page also still offered the old one-director two-step sign-in switch with "optional for directors" copy | `3466f8e` |
+| Browser walk | Ready for First Run still said that with PT and LWF Not set nothing is deducted and the run goes on | `171a559` |
+| Review of the fixes' screens | M1's Change password screen had never been built (only its API) | `6527b2e` |
 
 **Stop condition checked:** no other way was found for HR, a manager, an interviewer or the Developer to see pay data.
 
@@ -107,10 +117,11 @@ only by Prisma 7, a major upgrade with new configuration and driver adapters, es
 | Migrations, fresh database | passed (`migrate deploy`, then the development seed, then `seed:demo-company`) |
 | Migrations, upgrade | passed: the audited commit's migrations and seed, then the seven `fix_` migrations on top; `db:drift`: no difference |
 | Permission matrix, route inventory, Developer write sweep | passed after `ba191ce` (13 tests) |
+| First full backend suite (on `c5e2c99`) | 2,808 passed, 8 failed in 7 files: all fixed in `abe6b50` (table above) |
 | Full backend suite, alone, once | FULL_SUITE_RESULT |
-| H1 log scan (full-suite log) | H1_SCAN_RESULT |
-| Browser walk (6 roles × 1280 light and 390 dark, keyboard only; `frontend/e2e/audit-fix-walk.mjs`) | WALK_RESULT |
-| `npm run check:keyboard-leave` | KEYBOARD_RESULT |
+| H1 log scan | the walk's API, worker and frontend logs: 0 tokens, cookies, authorization headers or passwords, 0 PAN, Aadhaar or account-shaped values, 0 pay fields with values (scanner checked against a planted sample first); the final full-suite log: H1_SUITE_RESULT |
+| Browser walk (6 roles × 1280 light and 390 dark, keyboard only; `frontend/e2e/audit-fix-walk.mjs`) | passed on the final code: 156 stops (13 screens), every role sees exactly its screens and the forbidden state elsewhere; no console error; Tab always lands on an element with a visible focus ring; no rupee figure for any role except the directors (the reference values on Default behaviours). It found the two defects above (`3466f8e`, `171a559`). A keyboard-only save of System Settings, Security passed as a director at both widths |
+| `npm run check:keyboard-leave` (M10) | passed at 1280 light and 390 dark |
 | CI on the final code commit | CI_RESULT |
 
 ## 5. Decisions I made (not in the prompt; each is the safer choice)
@@ -123,6 +134,7 @@ only by Prisma 7, a major upgrade with new configuration and driver adapters, es
 - **M6 with exactly two directors:** the person affected is the only "other" director, so resetting or unlocking a director then needs break-glass.
 - **Development seed only:** records the directors turning compulsory two-step sign-in off, and "Does not apply to us" for the three statutory answers. Real databases start with two-step sign-in compulsory and the statutory answers Not set (blocking).
 - **L4:** outside production a personal email may use the reserved test domains; in production only `gmail.com` is accepted, as before.
+- **H2, corrected after the full run:** an office address over its limit makes everyone at it wait, correct passwords included, because exempting numbers with no failures of their own let a password spray run unlimited. The office is protected instead by the higher limit (100 in 15 minutes, the directors' setting), by a director or HR Admin seeing and clearing a blocked address, and by unlocking an account clearing its addresses.
 - **npm 10** hit an internal resolver error on these dependency trees, so the lockfiles were written with npm 11 (lockfile version unchanged; checked with npm 10 `npm ci`).
 
 ## 6. Commits

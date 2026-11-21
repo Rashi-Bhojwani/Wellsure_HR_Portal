@@ -131,3 +131,20 @@ Each entry: finding | test file(s) | what changed and why. An assertion was chan
 - backend/src/modules/peeps/__tests__/permissionMatrix.expected.ts: POST /api/badges/:id/revoke, POST /api/nudges/:id/remove and POST /api/nudges/:id/review/decide now expect 403 for the Developer (was 400): they are director-only, and the C3 Developer firewall refuses a Developer write before validation. Every other actor unchanged.
 - backend/src/modules/managers/__tests__/routeInventory.ts: the 14 routes the fixes added are classified (each checked in the service; none reachable with a manager-grantable key).
 - Not a test change but found by the matrix: the Developer firewall wrongly refused five of the person's own acts (give a badge, acknowledge their own asset, raise/cancel their own asset request, attach a document to their own leave request); they are added to DEVELOPER_SELF_SERVICE with a reason, so the matrix's reviewed 400/404 stands for them.
+
+### Final checks (2026-11-21)
+
+- backend/src/lib/__tests__/dbRoles.test.ts: the list of append-only tables that keep UPDATE gains contact_change_requests, director_role_changes and leave_change_requests (C1, C2, C3: each moves from PENDING once; its trigger refuses every other change).
+- backend/src/lib/__tests__/seedGuard.test.ts (fence 2b): the reviewed list of places that assign a role gains src/modules/access/directorChanges.ts (C2: applied only when a second director confirms), with a new assertion that it records the confirming director.
+- backend/src/middleware/__tests__/trustProxy.test.ts: sets the per-address limit (now the directors' setting, default 100) to 10, the smallest allowed, so the two tests keep proving which address is counted.
+- backend/src/modules/biometric/__tests__/greythrPunches.test.ts: the Developer's refusal code is DEVELOPER_VIEW_ONLY (the C3 firewall refuses first), was DEVELOPER_CEILING; still 403, nothing loaded.
+- backend/src/modules/leave/__tests__/permissions.test.ts: HR_EXECUTIVE no longer has leave.grant (C3), was asserted true.
+- backend/src/modules/parity/__tests__/accountAndSeparation.test.ts: another director suspending a director is a proposal (202, C2), was 200; the director stays active; the proposal is withdrawn.
+- backend/src/modules/tasks/__tests__/directorSources.test.ts: HR entering a director's bank details is refused (403 DIRECTOR_RECORD_SELF_ONLY, C1); the director enters their own and the same "offered to the other director, never the entrant or the owner" rule is asserted.
+- H2 correction found by trustProxy.test.ts: my H2 fix let a number with no failures of its own past an address over its limit, which let a password spray run unlimited. Removed. backend/src/modules/auth/__tests__/fixH2OfficeLockout.test.ts: the "no failures of its own signs in" test is replaced by "over its limit, an address waits for everyone (a spray is stopped)", and the clear-block test signs Alice in before the block. backend/src/modules/auth/__tests__/employeeNumberLogin.test.ts: the original assertion is restored (a real number with the right password and an unknown number get the same 429), with the limit set to 10.
+
+### Found by the browser walk (2026-11-21)
+- No existing test changed. New case in backend/src/modules/employee/__tests__/fixC1AccountTakeover.test.ts: a full System Settings save that resends the moved settings unchanged succeeds; changing one is refused before anything is written.
+### M1 follow-up (Change password screen)
+- No existing test changed. New: frontend/src/pages/account-security/__tests__/ChangePasswordPanel.test.tsx.
+
