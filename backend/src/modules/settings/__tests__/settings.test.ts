@@ -109,7 +109,7 @@ describe("System Settings (/api/settings/security)", () => {
     employeeIds.push(employee.employeeId);
     const user = await prisma.user.findUniqueOrThrow({ where: { employeeId: employee.employeeId } });
 
-    await createInvitation({ userId: user.id, email: "settings-test@gmail.com", fullName: "Settings Test", employeeCode: employee.employeeCode });
+    await createInvitation({ userId: user.id, email: "settings-test@example.invalid", fullName: "Settings Test", employeeCode: employee.employeeCode });
     const token = await prisma.invitationToken.findFirstOrThrow({ where: { userId: user.id }, orderBy: { createdAt: "desc" } });
 
     const hoursUntilExpiry = (token.expiresAt.getTime() - Date.now()) / (60 * 60 * 1000);

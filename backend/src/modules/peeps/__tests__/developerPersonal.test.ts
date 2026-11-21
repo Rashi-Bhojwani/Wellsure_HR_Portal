@@ -18,7 +18,7 @@ describe("the Developer sees no personal details anywhere in Peeps (or the rest 
   let undoDirectory: () => Promise<void> = async () => undefined;
   const tag = randomUUID().slice(0, 6);
   const VALUES = {
-    personalEmail: `demo.personal.${tag}@gmail.com`,
+    personalEmail: `demo.personal.${tag}@example.invalid`,
     mobile: `98${tag.replace(/\D/g, "7").padEnd(6, "7").slice(0, 6)}31`,
     currentAddress: `DEMO-CURRENT-ADDRESS-${tag}`,
     permanentAddress: `DEMO-PERMANENT-ADDRESS-${tag}`,

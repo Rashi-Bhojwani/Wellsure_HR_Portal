@@ -418,7 +418,7 @@ describe("Roles & permissions (E1)", () => {
       const result = await provisionSuperAdmin({
         employeeCode: code,
         fullName: "Test Bootstrap Person",
-        personalEmail: `boot.${code.toLowerCase()}@gmail.com`,
+        personalEmail: `boot.${code.toLowerCase()}@example.invalid`,
         mobile: "9000000002",
         dateOfBirth: "1985-05-05",
         gender: "OTHER",
@@ -451,7 +451,7 @@ describe("Roles & permissions (E1)", () => {
       await prisma.$executeRawUnsafe("ALTER TABLE users DISABLE TRIGGER users_protect_last_super_admin");
       try {
         await prisma.user.updateMany({ where: { id: { in: active.map((u) => u.id) } }, data: { status: "SUSPENDED" } });
-        const r = await bootstrapSuperAdmin({ employeeCode: code, fullName: "Fresh Db Person", personalEmail: `fresh.${code.toLowerCase()}@gmail.com`, mobile: "9000000003", dateOfBirth: "1980-01-01", gender: "OTHER", dateOfJoining: "2019-04-01" }, { operator: "Test Operator" });
+        const r = await bootstrapSuperAdmin({ employeeCode: code, fullName: "Fresh Db Person", personalEmail: `fresh.${code.toLowerCase()}@example.invalid`, mobile: "9000000003", dateOfBirth: "1980-01-01", gender: "OTHER", dateOfJoining: "2019-04-01" }, { operator: "Test Operator" });
         expect(r.outcome).toBe("created");
         await expect(assertBootstrapAllowed("SOMEONE-ELSE")).rejects.toThrow(new RegExp(`invitation is already outstanding for employee ${code}`));
         await expect(assertBootstrapAllowed(code)).resolves.toBeUndefined();
@@ -464,7 +464,7 @@ describe("Roles & permissions (E1)", () => {
 
     it("refuses a new employee without the details needed to create one", async () => {
       await expect(provisionSuperAdmin({ employeeCode: `NOPE-${randomUUID().slice(0, 6)}` })).rejects.toThrow(/fullName, personalEmail/);
-      await expect(provisionSuperAdmin({ employeeCode: "X", personalEmail: "someone@yahoo.com" })).rejects.toThrow();
+      await expect(provisionSuperAdmin({ employeeCode: "X", personalEmail: "someone@example.invalid" })).rejects.toThrow();
     });
   });
 

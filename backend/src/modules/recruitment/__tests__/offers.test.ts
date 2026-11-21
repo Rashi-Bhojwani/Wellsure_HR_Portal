@@ -59,7 +59,7 @@ describe("DEMO C-4B offers, pay, joining links, conversion and referrals", () =>
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     return r.body as { id: string; token: string; url: string; expiresAt: string };
   }
-  const conversionBody = (code: string) => ({ employeeCode: code, designationId: f.org.designationId, attendanceCapture: "MANUAL", personal: { dateOfBirth: "1990-01-01", gender: "OTHER", personalEmail: `demo.${randomUUID().slice(0, 8)}@gmail.com`, mobile: "9000000000", currentAddress: "DEMO address", permanentAddress: "DEMO address", emergencyContactName: "DEMO contact", emergencyContactPhone: "9000000001", emergencyContactRelation: "DEMO" } });
+  const conversionBody = (code: string) => ({ employeeCode: code, designationId: f.org.designationId, attendanceCapture: "MANUAL", personal: { dateOfBirth: "1990-01-01", gender: "OTHER", personalEmail: `demo.${randomUUID().slice(0, 8)}@example.invalid`, mobile: "9000000000", currentAddress: "DEMO address", permanentAddress: "DEMO address", emergencyContactName: "DEMO contact", emergencyContactPhone: "9000000001", emergencyContactRelation: "DEMO" } });
 
   beforeAll(async () => {
     f = await fixture();

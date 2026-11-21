@@ -144,7 +144,7 @@ describe("E1.1 — loud break-glass, append-only audit, manager data scope", () 
 
     it("logs outside the DB first, then emails EVERY active Super Admin (target included) and the security address, before acting", async () => {
       const original = env.SECURITY_ALERT_EMAIL;
-      (env as { SECURITY_ALERT_EMAIL?: string }).SECURITY_ALERT_EMAIL = "owners.inbox.test@gmail.com";
+      (env as { SECURITY_ALERT_EMAIL?: string }).SECURITY_ALERT_EMAIL = "owners.inbox.test@example.invalid";
       const warn = vi.spyOn(logger, "warn");
       const sent: string[] = [];
       vi.spyOn(mailService, "send").mockImplementation(async (m) => {
@@ -159,7 +159,7 @@ describe("E1.1 — loud break-glass, append-only audit, manager data scope", () 
         const activeSaEmails = (await prisma.user.findMany({ where: { status: "ACTIVE", roles: { some: { role: { code: "SUPER_ADMIN" } } } }, select: { employee: { select: { personal: { select: { personalEmail: true } } } } } })).map((u) => u.employee.personal!.personalEmail);
         expect(activeSaEmails).toContain(await emailOf(p.sa2.userId)); // the target is told too
         for (const e of activeSaEmails) expect(r.alert.emailed).toContain(e);
-        expect(r.alert.emailed).toContain("owners.inbox.test@gmail.com");
+        expect(r.alert.emailed).toContain("owners.inbox.test@example.invalid");
 
         const logCall = warn.mock.calls.findIndex((c) => (c[0] as { event?: string }).event === "security.breakglass");
         expect(logCall).toBeGreaterThanOrEqual(0);

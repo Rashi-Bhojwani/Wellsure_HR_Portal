@@ -171,7 +171,7 @@ describe("HR's bank and statutory changes wait for a director", () => {
         fullName: `Held Hire ${suffix}`,
         dateOfBirth: "1995-06-01",
         gender: "MALE",
-        personalEmail: `held.hire.${suffix}@gmail.com`,
+        personalEmail: `held.hire.${suffix}@example.invalid`,
         mobile: "9876543210",
         currentAddress: "Some address",
         permanentAddress: "Some address",

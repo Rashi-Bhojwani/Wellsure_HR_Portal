@@ -471,7 +471,7 @@ describe("employee-number login", () => {
 
     it("end to end via Forgot password: invited with no password, then the number + link activates the account", async () => {
       const code = `0${Math.floor(Math.random() * 1e6)}`.padStart(7, "0");
-      const created = await request(app).post("/api/employees").set(...authHeader(t.hr!)).send(payload(code, "setup.person.test@gmail.com"));
+      const created = await request(app).post("/api/employees").set(...authHeader(t.hr!)).send(payload(code, "setup.person.test@example.invalid"));
       expect(created.status, JSON.stringify(created.body)).toBe(201);
       const user = await prisma.user.findFirstOrThrow({ where: { employee: { employeeCode: code } } });
       expect([user.status, user.passwordHash]).toEqual(["INVITED", null]);
@@ -488,7 +488,7 @@ describe("employee-number login", () => {
       // The person: Forgot password with their number (typed with spaces), the link from the email, a password, then login.
       sent = [];
       await forgot(`  ${code} `);
-      expect(sent.map((m) => m.to)).toEqual(["setup.person.test@gmail.com"]);
+      expect(sent.map((m) => m.to)).toEqual(["setup.person.test@example.invalid"]);
       const raw = linkToken(sent[0]!.text, "reset-password");
       const set = await request(app).post(`/api/auth/reset-password/${raw}`).send({ password: NEW_PASSWORD });
       expect(set.status).toBe(200);
@@ -505,12 +505,12 @@ describe("employee-number login", () => {
 
     it("end to end via HR's Send setup link: one link, single use, then login", async () => {
       const code = `S${uniq()}`;
-      const created = await request(app).post("/api/employees").set(...authHeader(t.hr!)).send(payload(code, "setup.two.test@gmail.com"));
+      const created = await request(app).post("/api/employees").set(...authHeader(t.hr!)).send(payload(code, "setup.two.test@example.invalid"));
       expect(created.status).toBe(201);
       sent = [];
       const resend = await request(app).post(`/api/employees/${created.body.id}/resend-invite`).set(...authHeader(t.hr!));
       expect(resend.status).toBe(200);
-      expect(sent.map((m) => m.to)).toEqual(["setup.two.test@gmail.com"]);
+      expect(sent.map((m) => m.to)).toEqual(["setup.two.test@example.invalid"]);
       const raw = linkToken(sent[0]!.text, "set-password");
       const accept = await request(app).post(`/api/auth/invitations/${raw}/accept`).send({ password: NEW_PASSWORD });
       expect(accept.status).toBe(200);
@@ -523,8 +523,8 @@ describe("employee-number login", () => {
 
     it("refuses a new employee whose number differs from an existing one only by case", async () => {
       const code = `Dup${uniq()}`;
-      expect((await request(app).post("/api/employees").set(...authHeader(t.hr!)).send(payload(code, "dup.one.test@gmail.com"))).status).toBe(201);
-      const second = await request(app).post("/api/employees").set(...authHeader(t.hr!)).send({ ...payload(code.toUpperCase(), "dup.two.test@gmail.com"), official: { ...payload(code.toUpperCase(), "dup.x.test@gmail.com").official, deviceUserId: `${code}-2` } });
+      expect((await request(app).post("/api/employees").set(...authHeader(t.hr!)).send(payload(code, "dup.one.test@example.invalid"))).status).toBe(201);
+      const second = await request(app).post("/api/employees").set(...authHeader(t.hr!)).send({ ...payload(code.toUpperCase(), "dup.two.test@example.invalid"), official: { ...payload(code.toUpperCase(), "dup.x.test@example.invalid").official, deviceUserId: `${code}-2` } });
       expect(second.status).toBe(409);
       expect(second.body.error.code).toBe("EMPLOYEE_CODE_TAKEN");
     });

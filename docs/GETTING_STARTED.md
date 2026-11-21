@@ -418,6 +418,9 @@ really sends (`smtp`, `ses`) goes through a guard
 staging) it sends only to domains listed in `MAIL_ALLOWED_DOMAINS`
 (comma-separated, e.g. `MAIL_ALLOWED_DOMAINS=gmail.com`); the default is empty,
 so nothing leaves until you list the domain of the inbox you are testing with.
+Since the independent audit (L4, 2026-11-20) tests and development data use only reserved domains (`example.invalid`), and the personal-email
+rule accepts them outside production (production still accepts gmail.com only). Listing a public domain such as `gmail.com` lets any mail
+addressed to that domain go out from your machine; list it only while you test with your own inbox, then empty it again.
 In every mode, production included, it refuses reserved test domains
 (`*.invalid`, `*.test`, `example.com` …) and, while the demo company exists,
 any address of a demo employee. A refused email shows as "could not be sent"

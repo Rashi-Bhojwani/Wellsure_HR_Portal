@@ -156,7 +156,7 @@ describe("avatars and directory", () => {
       expect(one.birthday).toMatch(/^\d{2}-\d{2}$/); // day and month, never the year
       expect(one).not.toHaveProperty("mobile");
       expect(one).not.toHaveProperty("personalEmail");
-      expect(text).not.toContain("@gmail.com"); // the fixtures' personal email
+      expect(text).not.toContain("@example.invalid"); // the fixtures' personal email
       await setSetting("directory.contactFields", ["officialEmail", "mobile", "birthday"], p.director, p.director2);
       const all = (await everything("colleague")).one;
       expect(all).toHaveProperty("mobile");

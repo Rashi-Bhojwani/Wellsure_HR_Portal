@@ -77,7 +77,7 @@ describe("Engage — joining post fires from the real accept-invitation flow", (
   it("accepting the invitation creates exactly one AUTO_JOINING post, keyed on the real dateOfJoining", async () => {
     const suffix = randomUUID().slice(0, 8);
     const employeeCode = `ENGAGE-JOIN-${suffix}`;
-    const personalEmail = `engage.joining.${suffix}@gmail.com`;
+    const personalEmail = `engage.joining.${suffix}@example.invalid`;
 
     const createRes = await request(app)
       .post("/api/employees")

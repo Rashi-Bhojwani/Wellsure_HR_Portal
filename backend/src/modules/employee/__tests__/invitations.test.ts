@@ -47,7 +47,7 @@ describe("invitation emails: what really happened is what HR is told", () => {
     await cleanupEmployeeTestOrgMasters(org);
   });
 
-  function payload(email = `hire.${randomUUID().slice(0, 8)}@gmail.com`) {
+  function payload(email = `hire.${randomUUID().slice(0, 8)}@example.invalid`) {
     const suffix = randomUUID().slice(0, 8);
     const code = `INV-${suffix}`;
     codes.push(code);
@@ -63,19 +63,19 @@ describe("invitation emails: what really happened is what HR is told", () => {
 
   it("the wizard: when a mail server accepts it, the answer says SENT, to which address, and the record says so", async () => {
     const send = vi.spyOn(mailService, "send").mockImplementation(async (m) => ({ ...fakeReceipt(m.to), driver: "smtp" }));
-    const p = payload("someone@gmail.com");
+    const p = payload("someone@example.invalid");
     const res = await create(p);
     expect(res.status).toBe(201);
-    expect(res.body.invitation).toMatchObject({ status: "SENT", to: "someone@gmail.com", driver: "smtp" });
+    expect(res.body.invitation).toMatchObject({ status: "SENT", to: "someone@example.invalid", driver: "smtp" });
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send.mock.calls[0]![0]).toMatchObject({ to: "someone@gmail.com", subject: expect.stringContaining("set your password") });
+    expect(send.mock.calls[0]![0]).toMatchObject({ to: "someone@example.invalid", subject: expect.stringContaining("set your password") });
     const token = await tokenOf(p.official.employeeCode);
-    expect([token.emailTo, token.emailSentAt !== null, token.emailError]).toEqual(["someone@gmail.com", true, null]);
+    expect([token.emailTo, token.emailSentAt !== null, token.emailError]).toEqual(["someone@example.invalid", true, null]);
     // The audit log records that, to whom, by which driver and who sent it.
     const audits = await emailAudits(token.id);
     expect(audits).toHaveLength(1);
     expect(audits[0]!.actorUserId).toBe(hrUserId);
-    expect(audits[0]!.after).toMatchObject({ outcome: "SENT", to: "someone@gmail.com", driver: "smtp", error: null, employeeCode: p.official.employeeCode });
+    expect(audits[0]!.after).toMatchObject({ outcome: "SENT", to: "someone@example.invalid", driver: "smtp", error: null, employeeCode: p.official.employeeCode });
     expect((audits[0]!.after as { sentAt: string | null }).sentAt).toBeTruthy();
   });
 
@@ -92,7 +92,7 @@ describe("invitation emails: what really happened is what HR is told", () => {
 
   it("the wizard: when sending fails, the employee is still created, the answer says FAILED and why, and nothing pretends it worked", async () => {
     vi.spyOn(mailService, "send").mockRejectedValue(Object.assign(new Error("Invalid login"), { code: "EAUTH" }));
-    const p = payload("unreachable@gmail.com");
+    const p = payload("unreachable@example.invalid");
     const res = await create(p);
     expect(res.status).toBe(201);
     expect(res.body.invitation.status).toBe("FAILED");
@@ -102,10 +102,10 @@ describe("invitation emails: what really happened is what HR is told", () => {
     expect([token.emailSentAt, token.emailError]).toEqual([null, expect.stringMatching(/refused the sign-in/)]);
     const failedAudits = await emailAudits(token.id);
     expect(failedAudits).toHaveLength(1);
-    expect(failedAudits[0]!.after).toMatchObject({ outcome: "FAILED", to: "unreachable@gmail.com", sentAt: null, error: expect.stringMatching(/refused the sign-in/) });
+    expect(failedAudits[0]!.after).toMatchObject({ outcome: "FAILED", to: "unreachable@example.invalid", sentAt: null, error: expect.stringMatching(/refused the sign-in/) });
     const profile = await request(app).get(`/api/employees/${res.body.id}`).set(...authHeader(hrToken));
     expect([profile.status, profile.body.accountStatus]).toEqual([200, "INVITED"]);
-    expect(profile.body.invitation).toMatchObject({ status: "FAILED", to: "unreachable@gmail.com" });
+    expect(profile.body.invitation).toMatchObject({ status: "FAILED", to: "unreachable@example.invalid" });
   });
 
   it("resend: returns what happened, replaces the old link, and a failure is audited as a failure", async () => {
@@ -132,9 +132,9 @@ describe("invitation emails: what really happened is what HR is told", () => {
 
   it("an import never invites: people created without an invitation are listed as NOT_SENT, and HR sends their invitations in a batch, each with its own result", async () => {
     const meta = { actorUserId: hrUserId, ipAddress: null, userAgent: null };
-    const a = payload("batch.a@gmail.com");
-    const b = payload("batch.b@gmail.com");
-    const c = payload("batch.c@gmail.com");
+    const a = payload("batch.a@example.invalid");
+    const b = payload("batch.b@example.invalid");
+    const c = payload("batch.c@example.invalid");
     const send = vi.spyOn(mailService, "send");
     const ids: string[] = [];
     for (const p of [a, b, c]) ids.push((await createEmployee(p as never, meta, { sendInvitation: false })).id); // what the Import Center's commit does
@@ -148,16 +148,16 @@ describe("invitation emails: what really happened is what HR is told", () => {
 
     // One address is refused by the server; the other two go, and the refused one is reported as failed, not sent.
     send.mockImplementation(async (m) => {
-      if (m.to === "batch.b@gmail.com") throw Object.assign(new Error("550"), { code: "EENVELOPE", message: "550 mailbox unavailable" });
+      if (m.to === "batch.b@example.invalid") throw Object.assign(new Error("550"), { code: "EENVELOPE", message: "550 mailbox unavailable" });
       return { ...fakeReceipt(m.to), driver: "smtp" };
     });
     const res = await request(app).post("/api/employees/invitations/send").set(...authHeader(hrToken)).send({ employeeIds: ids });
     expect(res.status).toBe(200);
     expect([res.body.requested, res.body.sent, res.body.failed, res.body.fileOnly]).toEqual([3, 2, 1, 0]);
     const byEmail = Object.fromEntries(res.body.results.map((r: { email: string; delivery: { status: string; error?: string } }) => [r.email, r.delivery]));
-    expect(byEmail["batch.a@gmail.com"].status).toBe("SENT");
-    expect(byEmail["batch.b@gmail.com"]).toMatchObject({ status: "FAILED", error: expect.stringMatching(/did not accept/) });
-    expect(byEmail["batch.c@gmail.com"].status).toBe("SENT");
+    expect(byEmail["batch.a@example.invalid"].status).toBe("SENT");
+    expect(byEmail["batch.b@example.invalid"]).toMatchObject({ status: "FAILED", error: expect.stringMatching(/did not accept/) });
+    expect(byEmail["batch.c@example.invalid"].status).toBe("SENT");
     const after = await request(app).get("/api/employees/invitations?pageSize=100").set(...authHeader(hrToken));
     const status = (id: string) => after.body.items.find((i: { employeeId: string }) => i.employeeId === id).delivery.status;
     expect(ids.map(status)).toEqual(["SENT", "FAILED", "SENT"]);

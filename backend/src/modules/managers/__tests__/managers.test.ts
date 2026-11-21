@@ -205,7 +205,7 @@ describe("Manager Management and the three-level hierarchy (E2)", () => {
       const managerId = p.hrAdmin.employeeId; // not a manager
       const res = await hr().post("/api/employees", {
         official: { deviceUserId: `E2-${Date.now()}`, employeeCode: `E2-${Date.now()}`, dateOfJoining: "2026-01-05", departmentId: org.departmentId, designationId: org.designationId, locationId: org.locationId, employmentType: "PERMANENT", reportingManagerId: managerId },
-        personal: { fullName: "E2 Hire", dateOfBirth: "1995-01-01", gender: "OTHER", personalEmail: `e2.hire.${Date.now()}@gmail.com`, mobile: "9000000009", currentAddress: "a", permanentAddress: "a", emergencyContactName: "b", emergencyContactPhone: "9000000008", emergencyContactRelation: "c" },
+        personal: { fullName: "E2 Hire", dateOfBirth: "1995-01-01", gender: "OTHER", personalEmail: `e2.hire.${Date.now()}@example.invalid`, mobile: "9000000009", currentAddress: "a", permanentAddress: "a", emergencyContactName: "b", emergencyContactPhone: "9000000008", emergencyContactRelation: "c" },
       });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("HIERARCHY");

@@ -67,7 +67,7 @@ describe("Full onboarding, end to end: HR creates an employee -> invite email ->
   it("runs the full flow and the new hire ends up scoped to only their own data", async () => {
     const suffix = randomUUID().slice(0, 8);
     const employeeCode = `E2E-${suffix}`;
-    const personalEmail = `e2e.onboarding.${suffix}@gmail.com`;
+    const personalEmail = `e2e.onboarding.${suffix}@example.invalid`;
 
     // 1. HR creates the employee through the real Add Employee endpoint —
     // the same one the wizard's UI submits to.

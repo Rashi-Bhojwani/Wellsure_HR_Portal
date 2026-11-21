@@ -57,7 +57,7 @@ export async function createAutoPostTestEmployee(opts: { dateOfJoining: Date; da
         employeeId: employee.id,
         dateOfBirth: opts.dateOfBirth,
         gender: "OTHER",
-        personalEmail: `engage.auto.${suffix}@gmail.com`,
+        personalEmail: `engage.auto.${suffix}@example.invalid`,
         mobile: "9000000000",
         currentAddress: "Test address",
         permanentAddress: "Test address",

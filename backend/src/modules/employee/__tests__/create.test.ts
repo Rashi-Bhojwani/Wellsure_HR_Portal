@@ -56,7 +56,7 @@ describe("POST /api/employees (Add Employee wizard)", () => {
         fullName: `New Hire ${suffix}`,
         dateOfBirth: "1995-06-01",
         gender: "MALE",
-        personalEmail: `new.hire.${suffix}@gmail.com`,
+        personalEmail: `new.hire.${suffix}@example.invalid`,
         mobile: "9876543210",
         currentAddress: "Some address",
         permanentAddress: "Some address",

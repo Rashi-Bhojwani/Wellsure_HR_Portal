@@ -76,7 +76,7 @@ describe("a joiner dated inside a finalised cycle", () => {
       .set(...authHeader(hrToken))
       .send({
         official: { deviceUserId: code, employeeCode: code, dateOfJoining: JOIN, departmentId: org.departmentId, designationId: org.designationId, locationId: org.locationId, employmentType: "PERMANENT", attendanceCapture: "DEVICE" },
-        personal: { fullName: `Joiner ${suffix}`, dateOfBirth: "1965-06-01", gender: "MALE", personalEmail: `joiner.${suffix}@gmail.com`, mobile: "9876543210", currentAddress: "Some address", permanentAddress: "Some address", emergencyContactName: "Emergency Contact", emergencyContactPhone: "9876543211", emergencyContactRelation: "Parent" },
+        personal: { fullName: `Joiner ${suffix}`, dateOfBirth: "1965-06-01", gender: "MALE", personalEmail: `joiner.${suffix}@example.invalid`, mobile: "9876543210", currentAddress: "Some address", permanentAddress: "Some address", emergencyContactName: "Emergency Contact", emergencyContactPhone: "9876543211", emergencyContactRelation: "Parent" },
       });
     expect(res.status).toBe(201); // not refused because the cycle is locked
     joinerId = res.body.id;

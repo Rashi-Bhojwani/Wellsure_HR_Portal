@@ -40,7 +40,7 @@ export async function createLoginableTestEmployee(org: TestOrgMasters, opts: { r
       employeeId: employee.id,
       dateOfBirth: new Date("1990-01-01"),
       gender: "OTHER",
-      personalEmail: `leave.test.${suffix}@gmail.com`,
+      personalEmail: `leave.test.${suffix}@example.invalid`,
       mobile: "9000000000",
       currentAddress: "Test address",
       permanentAddress: "Test address",

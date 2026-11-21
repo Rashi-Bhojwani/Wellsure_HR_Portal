@@ -80,7 +80,7 @@ export async function createFullTestEmployee(org: TestOrgMasters, opts: { roleCo
       employeeId: employee.id,
       dateOfBirth: new Date("1990-01-01"),
       gender: "OTHER",
-      personalEmail: `test.${suffix}@gmail.com`,
+      personalEmail: `test.${suffix}@example.invalid`,
       mobile: "9000000000",
       currentAddress: "Test address",
       permanentAddress: "Test address",
