@@ -1,7 +1,7 @@
 import { default2faRoles } from "../../lib/authDefaults";
 import { getSetting, setSetting } from "../../lib/settings";
 import { writeAuditLog } from "../../lib/audit";
-import { DIRECTOR_2FA_SETTING_KEY, directorTwoFactorRequired, isDirector } from "../../lib/directorAuthority";
+import { directorTwoFactorRequired, isDirector } from "../../lib/directorAuthority";
 import { recordDirectorNotice, scheduleDelivery } from "../../lib/directorNotices";
 import { prisma } from "../../lib/prisma";
 import { RATE_LIMIT_DEFAULTS, RATE_LIMIT_KEYS, type RateLimitSetting, type SecuritySettings } from "./types";
