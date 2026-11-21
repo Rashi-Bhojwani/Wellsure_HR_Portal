@@ -127,3 +127,9 @@ export async function regenerateBackupCodes(): Promise<string[]> {
   const { data } = await apiClient.post<{ backupCodes: string[] }>("/api/auth/2fa/backup-codes/regenerate");
   return data.backupCodes;
 }
+
+/** FIX-M1 (independent audit 2026-11-20): change one's own password. Every other session ends; this device gets a fresh access token. */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ accessToken: string }> {
+  const { data } = await apiClient.post<{ accessToken: string }>("/api/auth/password", { currentPassword, newPassword });
+  return data;
+}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Alert, Button, Form, Input, Tooltip } from "antd";
-import { DesktopOutlined, KeyOutlined, LogoutOutlined, MobileOutlined, SafetyOutlined } from "@ant-design/icons";
+import { DesktopOutlined, LogoutOutlined, MobileOutlined, SafetyOutlined } from "@ant-design/icons";
 import type { AxiosError } from "axios";
 import { useAuth } from "../../hooks/useAuth";
 import * as authApi from "../../api/auth";
@@ -11,6 +11,7 @@ import { BackupCodeGrid } from "../auth/totp/BackupCodeGrid";
 import { ConfirmModal, EmptyState, KeyValueGrid, PageHeader, Panel, Skel, Stack, StatusChip, toast, useIsPhone } from "../../ui";
 import { fs, fw, radius, space, v } from "../../theme/tokens";
 import { NotificationChoices } from "./NotificationChoices";
+import { ChangePasswordPanel } from "./ChangePasswordPanel";
 
 interface DisableTotpForm {
   password: string;
@@ -130,16 +131,7 @@ export function AccountSecurityPage() {
           />
         </Panel>
 
-        <Panel title="Password" subtitle="Changing your password from inside the app isn't available yet.">
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: space[4], justifyContent: "space-between" }}>
-            <div style={{ color: v.textBody, fontSize: fs.md, flex: "1 1 280px" }}>
-              Use the reset link instead: we email it to the personal email on file, and it's valid for 1 hour.
-            </div>
-            <Button icon={<KeyOutlined />} size="large" block={phone} onClick={() => navigate("/forgot-password")}>
-              Reset password by email
-            </Button>
-          </div>
-        </Panel>
+        <ChangePasswordPanel onChanged={reloadSessions} />
 
         <Panel title="Two-Factor Authentication" subtitle="A 6-digit code from your phone at every sign-in." extra={<StatusChip tone={totpOn ? "success" : "neutral"}>{totpOn ? "Enabled" : "Not enabled"}</StatusChip>}>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: space[4] }}>
