@@ -67,3 +67,22 @@ export async function setDirectorChoices(modes: Partial<Record<(typeof DIRECTOR_
   const value = { v: 2, steps };
   await prisma.systemSetting.upsert({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY }, create: { key: DIRECTOR_AUTHORITY_SETTING_KEY, value }, update: { value } });
 }
+
+/**
+ * FIX-M5 (independent audit 2026-11-20): the development data answers "Does not apply to us" for professional tax, LWF and minimum wages. A test of the Not set
+ * (or "Applies") behaviour clears those answers for its run and gets back a function that puts "Does not apply to us" back (two made-up directors, as the seed).
+ */
+export async function setStatutoryAnswers(answers: Partial<Record<"statutory.professionalTax" | "statutory.labourWelfareFund" | "statutory.minimumWages", "NOT_APPLICABLE" | "APPLIES" | null>>): Promise<() => Promise<void>> {
+  const apply = async (key: string, value: "NOT_APPLICABLE" | "APPLIES" | null) => {
+    const existing = await prisma.behaviourProposal.findMany({ where: { key }, select: { id: true } });
+    await deleteWithDependents("BehaviourProposal", existing.map((r) => r.id));
+    if (value) {
+      const p = await prisma.behaviourProposal.create({ data: { key, value, reason: "test", proposedByUserId: "test-director-a" } });
+      await prisma.behaviourConfirmation.create({ data: { proposalId: p.id, confirmedByUserId: "test-director-b" } });
+    }
+  };
+  for (const [k, v] of Object.entries(answers)) await apply(k, v ?? null);
+  return async () => {
+    for (const k of Object.keys(answers)) await apply(k, "NOT_APPLICABLE");
+  };
+}

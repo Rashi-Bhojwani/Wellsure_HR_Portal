@@ -4,6 +4,7 @@ import { CONTINUING, PACK_CHECKED_ON, PACK_RULES, STANDARD_DEFAULT_LABEL, entryO
 import { DEVELOPER_ROLE_CODE, SENSITIVE_PERMISSION_KEYS } from "@shared/constants/sensitiveData";
 import { env } from "../../../config/env";
 import { businessToday } from "../../../lib/businessDate";
+import { STATUTORY_ANSWER_KEYS, STATUTORY_ANSWER_LABEL } from "@shared/constants/statutoryAnswers";
 import { activeDirectors, choiceFacts, directorTwoFactorRequired, singleDirectorSteps } from "../../../lib/directorAuthority";
 import { salariesOn } from "../../../lib/effectiveDating";
 import { activeUsersHoldingPermission, resolveAccess } from "../../../lib/permissions";
@@ -382,45 +383,20 @@ async function settlementHeadItem(): Promise<SetupItem> {
 }
 
 /** Owner decision 2026-11-17: "Professional Tax and LWF: not set" until both tables are entered (never blocking; nothing is deducted meanwhile). */
-async function ptLwfItem(rules: ItemSummary[]): Promise<SetupItem> {
-  const entered = (k: string) => Boolean(rules[RULE_CATALOG.findIndex((d) => d.key === k)]?.current);
-  const state = (await behaviourValue("statutory.state")).value as string | null;
-  const notSet = [...(entered("PT_SLABS") ? [] : ["Professional Tax"]), ...(entered("LWF_TABLE") ? [] : ["LWF"])];
-  const ok = notSet.length === 0;
-  return {
-    id: "statutory:ptlwf",
-    section: "law",
-    category: "Professional Tax and LWF",
-    title: ok ? "Professional Tax and LWF: set" : `${notSet.join(" and ")}: not set`,
-    why: "Professional tax and labour welfare fund are the owners' to set: the company's state (Default behaviours) and its tables (Rules and setup). No state's values are loaded.",
-    required: false,
-    status: "CONFIRMED",
-    enteredBy: null,
-    confirmedBy: null,
-    detail: `State: ${stateLabel(state)}. ${ok ? "Both tables are entered (each is confirmed as a rule)." : `${notSet.join(" and ")} not set: nothing is deducted for ${notSet.length === 1 ? "it" : "them"}, and the run and the payslip say "not set" (not "not levied"). A monthly run is not blocked.`}`,
-    where: ok ? RULES_PATH : { label: "System Settings, Default behaviours, state", path: `${BEHAVIOURS_PATH}#statutory.state` },
-    behaviour: { state: ok ? "CONFIRMED" : "NOT_SET", label: ok ? "Set" : "Not set" },
-  };
-}
-
-/** Owner decision 2026-11-17: "Minimum wages: not set" until a director has entered a rate and the compared heads (never blocking; the check never changes pay). */
-async function minimumWagesItem(): Promise<SetupItem> {
-  const [rates, basis] = await Promise.all([prisma.minimumWageRate.count(), prisma.minimumWageBasis.count()]);
-  const ok = rates > 0 && basis > 0;
-  return {
-    id: "statutory:minimumWages",
-    section: "law",
-    category: "Minimum wages",
-    title: ok ? "Minimum wages: set" : "Minimum wages: not set",
-    why: "Minimum wage rates, each person's category and the compared pay heads are the directors' to enter; none is loaded. The check never changes pay.",
-    required: false,
-    status: "CONFIRMED",
-    enteredBy: null,
-    confirmedBy: null,
-    detail: ok ? `${rates} rate${rates === 1 ? "" : "s"} entered, compared heads chosen.` : `${rates ? "" : "No rate entered. "}${basis ? "" : "No compared pay heads chosen. "}Until both exist the minimum wages check says Not set.`,
-    where: { label: "Payroll, Minimum Wages", path: "/admin/payroll/minimum-wages" },
-    behaviour: { state: ok ? "CONFIRMED" : "NOT_SET", label: ok ? "Set" : "Not set" },
-  };
+// FIX-M5 (independent audit 2026-11-20): one row each for professional tax, LWF and minimum wages. Not set is open and BLOCKS a real company's first run (and
+// every real monthly run); "Does not apply to us" is green and says nothing is deducted; "Applies" is green once its values are entered. The demo company is exempt.
+async function statutoryAnswerItems(demo: boolean): Promise<SetupItem[]> {
+  const { statutoryAnswers, statutoryValuesEntered } = await import("../statutoryAnswers");
+  const [answers, entered] = await Promise.all([statutoryAnswers(), statutoryValuesEntered()]);
+  return STATUTORY_ANSWER_KEYS.map((key): SetupItem => {
+    const label = STATUTORY_ANSWER_LABEL[key];
+    const answer = answers[key];
+    const valuesWhere = key === "statutory.minimumWages" ? { label: "Payroll, Minimum Wages", path: "/admin/payroll/minimum-wages" } : RULES_PATH;
+    const base = { id: `statutory:answer:${key.split(".")[1]}`, section: "law" as const, category: label, why: `Whether ${label.toLowerCase()} applies to the company is the directors' answer: "Does not apply to us" or "Applies" (then they enter its values). One proposes, the other confirms.`, required: !demo, ...(demo ? { notRequiredReason: "The demo company is exempt." } : {}), enteredBy: null, confirmedBy: null };
+    if (answer === "NOT_APPLICABLE") return { ...base, title: `${label}: does not apply to us`, status: "CONFIRMED", detail: "The directors answered \"Does not apply to us\": nothing is deducted or checked.", where: { label: "System Settings, Default behaviours", path: `${BEHAVIOURS_PATH}#${key}` } };
+    if (answer === "APPLIES") return { ...base, title: `${label}: applies`, status: entered[key] ? "CONFIRMED" : "NOT_SET", detail: entered[key] ? "The directors answered \"Applies\" and its values are entered." : "The directors answered \"Applies\", but its values are not entered yet. A real monthly run cannot be submitted until they are.", where: valuesWhere };
+    return { ...base, title: `${label}: not set`, status: "NOT_SET", detail: "Not set. Choose \"Does not apply to us\" or \"Applies\" (System Settings, Default behaviours). A real monthly run cannot be submitted until this has an answer.", where: { label: "System Settings, Default behaviours", path: `${BEHAVIOURS_PATH}#${key}` } };
+  });
 }
 
 export async function buildSetupReport(): Promise<SetupReport> {
@@ -428,7 +404,7 @@ export async function buildSetupReport(): Promise<SetupReport> {
   const ruleData = await loadItems("RULE");
   const summaries = RULE_CATALOG.map((d) => summarise(ruleData, d.key));
   const plain = new Map<string, unknown>(RULE_CATALOG.map((d, i) => [d.key, d.sensitiveClass ? undefined : summaries[i]!.current?.value]));
-  const items: SetupItem[] = [...ruleItems(summaries, plain, businessToday().toISOString().slice(0, 10)), ...(await packItems(demo)), await settlementHeadItem(), await ptLwfItem(summaries), await minimumWagesItem(), ...(await salaryItems()), ...(await layoutItems()), ...(await peopleItems()), ...(await safetyItems(demo)), ...(await behaviourItems())];
+  const items: SetupItem[] = [...ruleItems(summaries, plain, businessToday().toISOString().slice(0, 10)), ...(await packItems(demo)), await settlementHeadItem(), ...(await statutoryAnswerItems(demo)), ...(await salaryItems()), ...(await layoutItems()), ...(await peopleItems()), ...(await safetyItems(demo)), ...(await behaviourItems())];
   items.push(...(await (await import("../../lateness/setupRows")).latenessSetupItems())); // LATE: lateness rows, never blocking (docs/plans/LATE_CHECKLIST.md §7)
   const sections: SetupSection[] = SECTION_ORDER.map((id) => ({ id, ...SECTION_TEXT[id], items: items.filter((i) => i.section === id) }));
   return { generatedAt: new Date().toISOString() /* allow-clock: the instant the report was made */, environment: env.APP_ENV, demo, sections };

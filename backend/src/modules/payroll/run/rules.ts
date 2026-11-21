@@ -56,6 +56,8 @@ export interface RunRules {
 export const notSetFromPins = (pins: ReadonlyArray<{ key: string; kind?: string; unset?: boolean }>, key: "PT_SLABS" | "LWF_TABLE"): boolean => pins.some((p) => p.key === key && (p.kind === "NOT_SET" || p.unset === true));
 
 export interface RuleNeeds {
+  /** FIX-M5: the directors answered "Does not apply to us" for professional tax / LWF. */
+  statutoryNotApplicable?: { pt?: boolean; lwf?: boolean };
   /** The run pays loss of pay back (Stage 3.3b). */
   reversals?: boolean;
   arrears: boolean;
@@ -108,6 +110,8 @@ export function loadRunRules(ctx: RuleContext, needs: RuleNeeds): RunRules {
   // records a NOT_SET pin, so the run, the payslip and Ready say "not set" (never "not levied"); a monthly run is not blocked or made a test by it.
   const notSet: Array<"PT" | "LWF"> = [];
   const stateTable = <T>(key: "PT_SLABS" | "LWF_TABLE", rule: "PT" | "LWF"): T | null => {
+    // FIX-M5: the directors answered "Does not apply to us": nothing is deducted and nothing is pinned as "not set".
+    if (needs.statutoryNotApplicable?.[rule === "PT" ? "pt" : "lwf"]) return null;
     if (ctx.isSet(key)) return ctx.optional<T>(key);
     ctx.addNotSetPin(key);
     notSet.push(rule);

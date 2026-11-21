@@ -350,9 +350,10 @@ describe("Standard defaults in the database", () => {
     // Changed 2026-11-17: PT and LWF are the owners' tables, never required for the first run, and a non-blocking row says they are not set.
     const pt = items.find((i) => i.id === "rule:PT_SLABS")!;
     expect([pt.required, pt.notRequiredReason]).toEqual([false, expect.stringMatching(/set by the owners/)]);
-    const row = readinessOf(report).behaviours.find((b) => b.itemId === "statutory:ptlwf")!;
-    expect([row.title, row.state]).toEqual(["Professional Tax and LWF: not set", "NOT_SET"]);
-    expect(readinessOf(report).blockers.some((b) => b.itemId === "statutory:ptlwf" || b.itemId === "rule:PT_SLABS" || b.itemId === "rule:LWF_TABLE")).toBe(false);
+    // Changed 2026-11-21 (audit M5): the information row "Professional Tax and LWF: not set" is replaced by one answer row each; the seed answers "Does not
+    // apply to us", so each is green and nothing blocks. Not set (blocking) is covered by fixM5StatutoryAnswers.test.ts.
+    for (const k of ["professionalTax", "labourWelfareFund", "minimumWages"]) expect(items.find((i) => i.id === `statutory:answer:${k}`)!.status).toBe("CONFIRMED");
+    expect(readinessOf(report).blockers.some((b) => b.itemId.startsWith("statutory:answer:") || b.itemId === "rule:PT_SLABS" || b.itemId === "rule:LWF_TABLE")).toBe(false);
     expect(items.find((i) => i.id === "rule:ESI_EMPLOYEE_RATE")!.detail).toMatch(/Standard default, change in settings: 0\.75/);
   });
 });

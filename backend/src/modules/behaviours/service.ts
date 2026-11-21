@@ -5,6 +5,7 @@ import { namesOfUsers } from "../payroll/names";
 import { prisma } from "../../lib/prisma";
 import { HttpError } from "../../middleware/errorHandler";
 import { COMPANY_STATES, DEFAULT_REVIEW_INTERVAL_MONTHS, STANDARD_DEFAULT_LABEL } from "@shared/constants/statutoryDefaults";
+import { STATUTORY_ANSWERS } from "@shared/constants/statutoryAnswers";
 
 // D-37 (docs/plans/D37_DEFAULTS.md). Behaviour settings: each key's value in force is the latest proposal a DIFFERENT director confirmed; with none, it is the key's
 // default. Exactly three keys have a common default (the owners' D-37 exception, labelled "Default, change in settings"); the max-deduction percentage has none (Not set).
@@ -272,6 +273,32 @@ export const BEHAVIOURS = {
     defaultValue: false as boolean,
     d37: true,
     defaultText: "Off: personal emails are never shown in the directory",
+  },
+  // FIX-M5 (independent audit 2026-11-20): one answer each for professional tax, LWF and minimum wages (shared/constants/statutoryAnswers.ts). Not set until two
+  // directors confirm "Does not apply to us" or "Applies"; a real monthly run is refused until all three have an answer.
+  "statutory.professionalTax": {
+    title: "Professional Tax: does it apply to us?",
+    what: "\"Does not apply to us\": nothing is deducted and Ready for First Run says so. \"Applies\": enter the PT table under Rules and setup. Not set: a real monthly run cannot be submitted.",
+    schema: z.enum(STATUTORY_ANSWERS),
+    defaultValue: null as "NOT_APPLICABLE" | "APPLIES" | null,
+    d37: false,
+    defaultText: "Not set: a real monthly run cannot be submitted until this is answered",
+  },
+  "statutory.labourWelfareFund": {
+    title: "Labour Welfare Fund: does it apply to us?",
+    what: "\"Does not apply to us\": nothing is deducted and Ready for First Run says so. \"Applies\": enter the LWF table under Rules and setup. Not set: a real monthly run cannot be submitted.",
+    schema: z.enum(STATUTORY_ANSWERS),
+    defaultValue: null as "NOT_APPLICABLE" | "APPLIES" | null,
+    d37: false,
+    defaultText: "Not set: a real monthly run cannot be submitted until this is answered",
+  },
+  "statutory.minimumWages": {
+    title: "Minimum wages: do they apply to us?",
+    what: "\"Does not apply to us\": the minimum wages check is not run. \"Applies\": enter the rates and the compared pay heads under Payroll, Minimum Wages. Not set: a real monthly run cannot be submitted.",
+    schema: z.enum(STATUTORY_ANSWERS),
+    defaultValue: null as "NOT_APPLICABLE" | "APPLIES" | null,
+    d37: false,
+    defaultText: "Not set: a real monthly run cannot be submitted until this is answered",
   },
   "payroll.ctcIncludesEmployerStatutory": {
     title: "CTC includes the employer's PF and ESI (PY-43)",

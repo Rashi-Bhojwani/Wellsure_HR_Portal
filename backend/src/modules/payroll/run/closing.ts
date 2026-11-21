@@ -215,7 +215,7 @@ async function envelope(slug: Slug, run: PayrollRun, actor: Actor, blockers: Blo
   const subject = SUBJECT_OF[slug];
   const approval = await liveApproval(subject, run.id);
   const authority = await authorityForDisplay(STEP_OF[slug]);
-  if (!blockers.some((b) => b.code === "DIRECTOR_CHOICE_NOT_SET")) blockers = [...(await choiceBlockers(slug === "run" ? "approved" : "carried out")), ...blockers];
+  if (!blockers.some((b) => b.code === "STATUTORY_ANSWER_NOT_SET")) blockers = [...(await choiceBlockers(slug === "run" ? "approved" : "carried out")), ...blockers];
   const checkers =
     authority === "DIRECTOR_AUTHORITY" && !approval
       ? ({ eligible: [], excluded: [], state: "SELF", message: "You can do this yourself. It takes effect at once, and the other director is told." } satisfies CheckerAvailability)
@@ -244,9 +244,16 @@ async function envelope(slug: Slug, run: PayrollRun, actor: Actor, blockers: Blo
 
 /** Payroll does not run while the two directors have not both chosen, for every step that can commit money or change pay rules, who decides it. */
 // FIX-H4 (independent audit 2026-11-20): a step with no confirmed choice is decided by two directors (the default), so it no longer blocks the run.
-async function choiceBlockers(_action: string): Promise<Blocker[]> {
+// FIX-M5 (independent audit 2026-11-20): a REAL monthly run cannot go on until professional tax, LWF and minimum wages each have the directors' answer ("Does
+// not apply to us", or "Applies" with its values entered). The demo company is exempt. (Name kept: it is the run's first blocker check.)
+async function choiceBlockers(action: string): Promise<Blocker[]> {
   void unsetRequiredSteps;
-  return [];
+  const { isDemoCompany } = await import("../setup/status");
+  if (await isDemoCompany()) return [];
+  const { statutoryRunProblems } = await import("../statutoryAnswers");
+  const problems = await statutoryRunProblems();
+  if (problems.length === 0) return [];
+  return [{ code: "STATUTORY_ANSWER_NOT_SET", title: "Professional Tax, LWF and minimum wages need an answer", message: `${problems.join("; ")}. Answer each in System Settings, Default behaviours (one director proposes, the other confirms). Until then the run cannot be ${action}.` }];
 }
 
 async function realBlocker(run: PayrollRun, action: string): Promise<Blocker[]> {

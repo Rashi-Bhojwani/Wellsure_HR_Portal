@@ -80,6 +80,12 @@ export const checkQuery = z.object({ runId: z.string().min(1).max(64) }).strict(
 
 /** The check for one calculated run: who is below the minimum, and what is Not set (no basis, people without a category, state and category without a rate). */
 export async function check(raw: unknown, actor: Actor) {
+  // FIX-M5 (independent audit 2026-11-20): the directors answered "Does not apply to us": the check is not run.
+  const { behaviourValue } = await import("../../behaviours/service");
+  if ((await behaviourValue("statutory.minimumWages")).value === "NOT_APPLICABLE") {
+    await requireDirector(actor.userId, "check minimum wages");
+    return { run: null, notApplicable: true, notSet: [], below: [], checked: 0, note: "The directors answered \"Does not apply to us\" for minimum wages: the check is not run." };
+  }
   await requireDirector(actor.userId, "run the minimum wages check");
   const p = checkQuery.safeParse(raw);
   if (!p.success) throw bad(p.error);

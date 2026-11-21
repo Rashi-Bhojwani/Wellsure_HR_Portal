@@ -9,6 +9,7 @@ import { executeCalculation, setCalculationEnqueuer } from "../run/engine";
 import { buildRunWorkbook } from "../run/export";
 import { CYCLE, api, buildRunWorld, calculateAgain, calculateRun, day, lockCycle, setRules, teardownRunWorld, type RunWorld } from "./runTestHelpers";
 import { FIRST_SALARY_DAY, giveSalary } from "./salaryTestHelpers";
+import { setStatutoryAnswers } from "./payrollTestHelpers";
 
 // A payroll run through the real API, the real job and the real database: who is paid what, how it is stored, what it says it was built on, and what happens
 // when the world moves. The arithmetic itself is proved in runPure.test.ts; here it is proved that the pipeline carries it faithfully.
@@ -20,7 +21,11 @@ describe("a payroll run", () => {
   let runId: string;
   const who = (n: (typeof NAMES)[number]) => world.named[n]!.employeeId;
 
+  let restoreAnswers: () => Promise<void>;
+
   beforeAll(async () => {
+    // Changed 2026-11-21 (audit M5): the seed answers "Does not apply to us"; these tests prove the "Applies, table not entered" pins.
+    restoreAnswers = await setStatutoryAnswers({ "statutory.professionalTax": "APPLIES", "statutory.labourWelfareFund": "APPLIES" });
     world = await buildRunWorld([...NAMES]);
     for (const n of ["full", "lop", "joiner", "leaver", "revised", "unlocked", "nobank"] as const) await giveSalary(world, who(n), "600000", FIRST_SALARY_DAY);
     await giveSalary(world, who("esi"), "240000", FIRST_SALARY_DAY);
@@ -40,7 +45,10 @@ describe("a payroll run", () => {
     runId = await calculateRun(world);
   }, 300_000);
 
-  afterAll(async () => teardownRunWorld(world));
+  afterAll(async () => {
+    await teardownRunWorld(world);
+    await restoreAnswers();
+  });
 
   const item = async (n: (typeof NAMES)[number]) => (await api(world.tokens.maker, "get", `/runs/${runId}/items/${who(n)}`)).body;
   const amounts = (i: { lines: Array<{ code: string; amount: string }> }) => Object.fromEntries(i.lines.map((l) => [l.code.replace(`${world.prefix}_`, ""), l.amount]));

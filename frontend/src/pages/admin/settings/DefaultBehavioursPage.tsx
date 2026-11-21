@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { COMPANY_STATES, stateLabel } from "@shared/constants/statutoryDefaults";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Form, Input, InputNumber, Select, Typography } from "antd";
+import { STATUTORY_ANSWER_KEYS, STATUTORY_ANSWER_LABEL, STATUTORY_ANSWER_REFERENCE, STATUTORY_ANSWER_TEXT, type StatutoryAnswerKey } from "@shared/constants/statutoryAnswers";
 import * as api from "../../../api/behaviours";
 import * as loansApi from "../../../api/loans";
 import * as lettersApi from "../../../api/letters";
@@ -10,7 +11,7 @@ import * as payrollApi from "../../../api/payroll";
 import * as leaveApi from "../../../api/leave";
 import type { Behaviour, BehaviourKey } from "../../../api/behaviours";
 import { apiErrorMessage } from "../../../lib/apiError";
-import { PageHeader, Panel, QueryState, SideDrawer, StatusChip, toast } from "../../../ui";
+import { ApprovalBanner, PageHeader, Panel, QueryState, SideDrawer, StatusChip, toast } from "../../../ui";
 import { space } from "../../../theme/tokens";
 
 // System Settings > Default behaviours (D-37, docs/plans/D37_DEFAULTS.md; M task 1 adds the identity confirmation), directors only. Four behaviours have a common default, labelled "Default, change in settings";
@@ -30,6 +31,7 @@ function describe(b: Pick<Behaviour, "key" | "value">, leaveTypeNames: ReadonlyM
   if (b.key === "auth.staySignedInDays") return `A person stays signed in for ${String(b.value)} day(s) on a device, renewed each time it is used`;
   if (b.key === "payroll.ctcIncludesEmployerStatutory") return v === true ? "On: CTC = gross + employer PF + employer ESI" : "Off: CTC is gross pay only";
   // FIX (independent audit 2026-11-20): the five settings the audit fixes add.
+  if ((STATUTORY_ANSWER_KEYS as readonly string[]).includes(b.key)) return b.value === "NOT_APPLICABLE" ? "Does not apply to us: nothing is deducted or checked" : b.value === "APPLIES" ? "Applies: its values are entered under Rules and setup (PT, LWF) or Payroll, Minimum Wages" : "Not set: a real monthly run cannot be submitted until this is answered";
   if (b.key in FIX_BOOLEANS) return v === true ? FIX_BOOLEANS[b.key]![0] : FIX_BOOLEANS[b.key]![1];
   if (b.key === "auth.loginIpFailureLimit") return v && typeof v === "object" ? `${String(v.maxAttempts)} failed sign-ins in ${Math.round(Number(v.windowSeconds) / 60)} minutes from one address` : "100 failed sign-ins in 15 minutes";
   if (b.key === "access.developerSeesSwipes") return v === true ? "On: the Developer role sees Employee Swipes" : "Off: the Developer role does not see Employee Swipes";
@@ -93,7 +95,7 @@ const FIX_BOOLEANS: Record<string, [string, string, string]> = {
   "lateness.waiverNeedsDirector": ["On: HR approves a lateness waiver, a director confirms it", "Off: HR's approval of a lateness waiver is final", "Lateness waivers need a director's confirmation"],
   "people.directoryShowsPersonalEmail": ["On: colleagues see personal emails in the directory", "Off: personal emails are never shown in the directory", "Colleagues see a personal email in the directory"],
 };
-type FormValues = { maxAttempts?: number; windowMinutes?: number; reason: string; stateKey?: string; leaveTypeId?: string; months?: number; allowance?: string; retentionDays?: number; effectiveFrom?: string; minYears?: string; partYear?: string; daysPerYear?: string; divisor?: string; ceiling?: string; noticeDays?: number; recoverShortfall?: string; payHead?: string; rateMode?: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string; exitLeaveTypes?: string[]; divisorKind?: string; divisorDays?: string; codes?: string[]; roundMode?: string; scale?: number; minutes?: number; days?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
+type FormValues = { answer?: "NOT_APPLICABLE" | "APPLIES"; maxAttempts?: number; windowMinutes?: number; reason: string; stateKey?: string; leaveTypeId?: string; months?: number; allowance?: string; retentionDays?: number; effectiveFrom?: string; minYears?: string; partYear?: string; daysPerYear?: string; divisor?: string; ceiling?: string; noticeDays?: number; recoverShortfall?: string; payHead?: string; rateMode?: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string; exitLeaveTypes?: string[]; divisorKind?: string; divisorDays?: string; codes?: string[]; roundMode?: string; scale?: number; minutes?: number; days?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
 
 export function DefaultBehavioursPage() {
   const queryClient = useQueryClient();
@@ -112,7 +114,8 @@ export function DefaultBehavioursPage() {
     mutationFn: (v: FormValues) => {
       const key = editing!.key as BehaviourKey;
       const value =
-        key === "access.developerSeesSwipes" || key === "identity.directorConfirmsHrChanges" || key in FIX_BOOLEANS ? v.on === "on"
+        (STATUTORY_ANSWER_KEYS as readonly string[]).includes(key) ? v.answer
+        : key === "access.developerSeesSwipes" || key === "identity.directorConfirmsHrChanges" || key in FIX_BOOLEANS ? v.on === "on"
         : key === "auth.loginIpFailureLimit" ? { maxAttempts: v.maxAttempts, windowSeconds: (v.windowMinutes ?? 15) * 60 }
         : key === "letters.employeeMayAsk" ? (v.codes ?? [])
         : key === "leave.leavingMonthAccrual" ? (v.mode === "FULL_IF_MIN_DAYS" ? { mode: v.mode, minDays: v.minDays } : { mode: v.mode })
@@ -142,6 +145,7 @@ export function DefaultBehavioursPage() {
     form.resetFields();
     const v = b.value as Record<string, unknown> | boolean | null;
     if (b.key === "access.developerSeesSwipes" || b.key === "identity.directorConfirmsHrChanges" || b.key === "payroll.ctcIncludesEmployerStatutory" || b.key in FIX_BOOLEANS) form.setFieldsValue({ on: v === true ? "on" : "off" });
+    if ((STATUTORY_ANSWER_KEYS as readonly string[]).includes(b.key) && typeof b.value === "string") form.setFieldsValue({ answer: b.value as "NOT_APPLICABLE" | "APPLIES" });
     if (b.key === "auth.loginIpFailureLimit") { const l = (v as { maxAttempts?: number; windowSeconds?: number } | null) ?? {}; form.setFieldsValue({ maxAttempts: l.maxAttempts ?? 100, windowMinutes: Math.round((l.windowSeconds ?? 900) / 60) }); }
     if (b.key === "statutory.state" && typeof b.value === "string") form.setFieldsValue({ stateKey: b.value });
     if ((b.key === "leave.earnedLeaveType" || b.key === "leave.compOffType") && typeof b.value === "string") form.setFieldsValue({ leaveTypeId: b.value });
@@ -205,6 +209,14 @@ export function DefaultBehavioursPage() {
             <Form.Item name="on" label="The Developer role sees Employee Swipes" rules={[{ required: true }]}>
               <Select options={[{ value: "off", label: "Off" }, { value: "on", label: "On" }]} />
             </Form.Item>
+          )}
+          {editing && (STATUTORY_ANSWER_KEYS as readonly string[]).includes(editing.key) && (
+            <>
+              <Form.Item name="answer" label={`${STATUTORY_ANSWER_LABEL[editing.key as StatutoryAnswerKey]}: does it apply to us?`} rules={[{ required: true, message: "Choose one" }]}>
+                <Select options={[{ value: "NOT_APPLICABLE", label: STATUTORY_ANSWER_TEXT.NOT_APPLICABLE }, { value: "APPLIES", label: STATUTORY_ANSWER_TEXT.APPLIES }]} />
+              </Form.Item>
+              <ApprovalBanner tone="info" title="Researched reference values (not loaded, check them yourselves)" description={STATUTORY_ANSWER_REFERENCE[editing.key as StatutoryAnswerKey]} style={{ marginBottom: space[4] }} />
+            </>
           )}
           {editing && editing.key in FIX_BOOLEANS && (
             <Form.Item name="on" label={FIX_BOOLEANS[editing.key]![2]} rules={[{ required: true }]}>

@@ -1,13 +1,14 @@
 import ExcelJS from "exceljs";
 import fc from "fast-check";
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, onTestFinished } from "vitest";
 import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import { deleteWithDependents } from "../../../lib/__tests__/cleanup";
 import { setBusinessTodayForTests } from "../../../lib/businessDate";
 import { prisma } from "../../../lib/prisma";
 import { app, authHeader, cleanupFullTestEmployee, createFullTestEmployee, loginAs } from "../../employee/__tests__/employeeTestHelpers";
 import { byBank, bankSummaryHtml } from "../run/bankSummary";
+import { setStatutoryAnswers } from "./payrollTestHelpers";
 import { buildPayslips } from "../run/payslip";
 import { addMonthsClamped, serviceLength } from "../settlements/guide";
 import { form16Html } from "../tax/form16Html";
@@ -328,6 +329,8 @@ describe("Session A parity rows over a finalised run", () => {
   });
 
   it("ST-29: the minimum wages check says what is Not set, lists who is below the minimum in force for their state and category, and changes no pay", async () => {
+    const restoreAnswer = await setStatutoryAnswers({ "statutory.minimumWages": "APPLIES" }); // changed 2026-11-21 (audit M5): the seed answers "Does not apply to us"
+    onTestFinished(restoreAnswer);
     const mw = (m: "get" | "post", path: string, body?: object, t = world.tokens.maker) => call(t, m, `/api/payroll-minimum-wages${path}`, body);
     for (const t of [tok.hr!, tok.mgr!, tok.a!, tok.dev!]) expect((await mw("get", `/check?runId=${runId}`, undefined, t)).status).toBe(403);
     const first = await mw("get", `/check?runId=${runId}`);

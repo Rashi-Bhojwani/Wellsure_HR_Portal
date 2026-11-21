@@ -4,17 +4,22 @@ import { prisma } from "../../../lib/prisma";
 import { pinStatuses, type RulePin } from "../rules/context";
 import { buildPayslips } from "../run/payslip";
 import { payslipHtml } from "../run/payslipHtml";
-import { REAL_RULES, closeWorld, closingWorld, confirmAllPins, staffWith, type Closing } from "./closeTestHelpers";
+import { REAL_RULES, closeWorld, closingWorld, confirmAllPins, staffWith, step, type Closing } from "./closeTestHelpers";
 import { api, calculateAgain, calculateRun, setRules } from "./runTestHelpers";
+import { setStatutoryAnswers } from "./payrollTestHelpers";
 
 // Owner decision 2026-11-17 (docs/plans/OWNER_EMPTY_SETTINGS.md): professional tax and LWF ship Not set (no state's values are loaded). Not set means NO deduction,
 // and the run, the payslip and Ready say "Professional Tax: not set" so nobody reads it as "not levied". It does not make a monthly run a test or block it. Made-up people.
 
-describe("Professional tax and LWF Not set: no deduction, said plainly on the run and the payslip, the month not blocked", () => {
+// FIX-M5 (independent audit 2026-11-20): changed test. The directors now answer "Does not apply to us" or "Applies" for each. Here they answered "Applies" and
+// entered no table: the calculation still deducts nothing and says "not set" (below, unchanged), but a REAL run can no longer be submitted (the last test).
+describe("Professional tax and LWF 'Applies' with no table: no deduction, said plainly on the run and the payslip, and the run cannot be submitted", () => {
   let world: Closing;
   let runId = "";
+  let restoreAnswers: () => Promise<void>;
 
   beforeAll(async () => {
+    restoreAnswers = await setStatutoryAnswers({ "statutory.professionalTax": "APPLIES", "statutory.labourWelfareFund": "APPLIES" });
     world = await closingWorld(["a"]);
     await staffWith(world, ["a"]);
     runId = await calculateRun(world); // no PT or LWF table entered by anyone in this test
@@ -23,7 +28,13 @@ describe("Professional tax and LWF Not set: no deduction, said plainly on the ru
 
   afterAll(async () => {
     await closeWorld(world);
+    await restoreAnswers();
   }, 300_000);
+
+  it("a real run cannot be submitted while an answer is open or 'Applies' has no table (FIX-M5)", async () => {
+    const preview = await step(world.tokens.maker, runId, "run", "preview");
+    expect(JSON.stringify(preview.body)).toContain("STATUTORY_ANSWER_NOT_SET");
+  });
 
   it("the run deducts nothing for them, records NOT_SET (not a Placeholder), says \"not set\" and is not a test", async () => {
     const run = await prisma.payrollRun.findUniqueOrThrow({ where: { id: runId } });

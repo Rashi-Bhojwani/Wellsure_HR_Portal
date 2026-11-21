@@ -1005,6 +1005,12 @@ async function main() {
     // there it stays on until both real directors confirm otherwise.
     const off = await prisma.behaviourProposal.create({ data: { key: "auth.directorTwoFactorCompulsory", value: false, reason: "Development data: no authenticator app on a laptop", proposedByUserId: d1.id } });
     await prisma.behaviourConfirmation.create({ data: { proposalId: off.id, confirmedByUserId: d2.id } });
+    // FIX-M5 (independent audit 2026-11-20): a real monthly run needs the directors' answer for professional tax, LWF and minimum wages. The development data
+    // answers "Does not apply to us" for all three, the way the screens would; a real company starts Not set and its first run waits for the answers.
+    for (const key of ["statutory.professionalTax", "statutory.labourWelfareFund", "statutory.minimumWages"]) {
+      const a = await prisma.behaviourProposal.create({ data: { key, value: "NOT_APPLICABLE", reason: "Development data", proposedByUserId: d1.id } });
+      await prisma.behaviourConfirmation.create({ data: { proposalId: a.id, confirmedByUserId: d2.id } });
+    }
   }
 
   console.log(`Seeded ${n} employees across ${locations.length} branches in 2 cities.`);
