@@ -16,6 +16,6 @@ export const photoParamsSchema = z.object({
 });
 
 export const photoQuerySchema = z.object({
-  t: z.string().min(1).max(200).optional(),
+  t: z.string().min(1).max(2048).optional(), // FIX-M1: an access token (now carrying its session version) is longer than 200 characters; it is still refused (401), not a 400
   v: z.string().max(40).optional(), // cache-buster only; the current photo is always what's served
 });
