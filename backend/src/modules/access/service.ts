@@ -20,6 +20,7 @@ import { sendSecurityChangeNoticeEmail } from "../auth/emails";
 import { adminIssuePasswordReset, adminResetTotp, adminUnlock } from "../auth/service";
 import { inForceOn } from "../../lib/effectiveDating";
 import { revokeAllUserRefreshTokens } from "../auth/tokens"; // A-9
+import { disconnectUserSockets } from "../../realtime/emit";
 
 // Roles & permissions (spec §2, Phase 5 commit E1). The rules, numbered as in
 // docs/plans/PHASE_5.md §E1, are enforced HERE (the routes only check that
@@ -354,6 +355,7 @@ export async function assignRole(employeeId: string, roleCode: string, actor: Ac
   });
   await writeAuditLog({ ...meta, action: "access.role.assigned", entityType: "User", entityId: user.id, before: { roles: before }, after: { roles: [...before, role.code].sort() } });
   await notifyAccessChanged([user]);
+  disconnectUserSockets(user.employeeId); // FIX-M2: a role change reconnects their screens under the new roles
   return getEmployeeAccess(employeeId, actor);
 }
 
@@ -380,6 +382,7 @@ export async function removeRole(employeeId: string, roleCode: string, actor: Ac
   ]);
   await writeAuditLog({ ...meta, action: "access.role.removed", entityType: "User", entityId: user.id, before: { roles: before }, after: { roles: before.filter((c) => c !== roleCode && !alsoRemoved.includes(c)) } });
   await notifyAccessChanged([user]);
+  disconnectUserSockets(user.employeeId); // FIX-M2
   return getEmployeeAccess(employeeId, actor);
 }
 

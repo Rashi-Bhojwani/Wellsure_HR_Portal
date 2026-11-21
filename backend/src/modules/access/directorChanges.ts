@@ -135,10 +135,8 @@ export async function confirmDirectorChange(id: string, actor: DirectorChangeAct
   const text = `${ACTION_TEXT[outcome.c.action]} ${who}${outcome.c.roleCode ? ` (${outcome.c.roleCode})` : ""}`;
   await writeAuditLog({ actorUserId: actor.userId, ipAddress: meta.ipAddress ?? null, userAgent: meta.userAgent ?? null, action: outcome.applied ? "director.role_change.applied" : "director.role_change.confirmed", entityType: "DirectorRoleChange", entityId: id, after: { action: outcome.c.action, targetUserId: outcome.c.targetUserId, roleCode: outcome.c.roleCode, proposedBy: outcome.c.proposedByUserId } });
   if (!outcome.applied) return { applied: false as const, id, waitingFor: "every other director" };
-  if (outcome.c.action === "SUSPEND" || outcome.c.action === "REVOKE_SUPER_ADMIN") {
-    if (outcome.c.action === "SUSPEND") await revokeAllUserRefreshTokens(outcome.target.id);
-    disconnectUserSockets(outcome.target.employeeId);
-  }
+  if (outcome.c.action === "SUSPEND") await revokeAllUserRefreshTokens(outcome.target.id);
+  disconnectUserSockets(outcome.target.employeeId); // FIX-M2: any change to a director's roles or access reconnects their screens
   await notifyAccessChanged([outcome.target]);
   await notifyDirectors({ type: "director.role_change_applied", title: "A change to who is a director took effect", body: `Confirmed by a second director: ${text}.`, link: "/admin/admin-tools/confirmations", payload: { changeId: id } });
   await raiseSecurityEvent({ kind: "director.role_change_applied", targetUserId: actor.userId, summary: `A change to who is a director took effect: ${text}.`, details: { changeId: id, action: outcome.c.action } });

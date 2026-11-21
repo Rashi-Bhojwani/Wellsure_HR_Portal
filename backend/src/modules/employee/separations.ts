@@ -7,6 +7,7 @@ import { HttpError } from "../../middleware/errorHandler";
 import { revokeAllUserRefreshTokens } from "../auth/tokens";
 import { logger } from "../../lib/logger";
 import { assertSuperAdminRemains, isActiveSuperAdmin, otherActiveSuperAdmins } from "../../lib/superAdminGuard";
+import { disconnectUserSockets } from "../../realtime/emit";
 import { notifyEmployee } from "../notifications/notifyEmployee";
 import { activeUsersHoldingPermission } from "../../lib/permissions";
 import { emitTeamChanged } from "../../realtime/emit";
@@ -168,6 +169,7 @@ export async function processScheduledSeparations(): Promise<{ processed: number
       }
       emitTeamChanged([sep.employeeId]);
     }
+    disconnectUserSockets(sep.employeeId); // FIX-M2: again once committed, so a reconnect cannot slip in before the deactivation is visible
     processed += 1;
   }
 
@@ -186,6 +188,8 @@ export async function processScheduledSeparations(): Promise<{ processed: number
 // last day, removed because it can never take effect, for the audit log.
 export async function markSeparatedInTx(tx: Prisma.TransactionClient, employeeId: string, lastWorkingDate: Date, exitReason: string | null) {
   await tx.employee.update({ where: { id: employeeId }, data: { status: "SEPARATED", lastWorkingDate, exitReason } });
-  await tx.user.update({ where: { employeeId }, data: { status: "DEACTIVATED" } });
+  await tx.user.update({ where: { employeeId }, data: { status: "DEACTIVATED", sessionVersion: { increment: 1 } } });
+  // FIX-M2 (independent audit 2026-11-20): their open screens are disconnected at once (the handshake then refuses a deactivated account).
+  disconnectUserSockets(employeeId);
   return closeHistoryOnLeaving(tx, employeeId, lastWorkingDate);
 }
