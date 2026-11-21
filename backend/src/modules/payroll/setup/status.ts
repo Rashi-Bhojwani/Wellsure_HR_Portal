@@ -1,6 +1,6 @@
 import { BEHAVIOURS, BEHAVIOUR_KEYS, DEFAULT_LABEL, behaviourOn, behaviourValue } from "../../behaviours/service";
 import { RULE_CATALOG, type RuleDef } from "@shared/constants/payrollRules";
-import { CONTINUING, PACK_CHECKED_ON, PACK_RULES, STANDARD_DEFAULT_LABEL, entryOn, isPackCovered, packReviewNeeded, stateLabel } from "@shared/constants/statutoryDefaults";
+import { CONTINUING, PACK_CHECKED_ON, PACK_RULES, STANDARD_DEFAULT_LABEL, entryOn, isPackCovered, packReviewNeeded } from "@shared/constants/statutoryDefaults";
 import { DEVELOPER_ROLE_CODE, SENSITIVE_PERMISSION_KEYS } from "@shared/constants/sensitiveData";
 import { env } from "../../../config/env";
 import { businessToday } from "../../../lib/businessDate";
