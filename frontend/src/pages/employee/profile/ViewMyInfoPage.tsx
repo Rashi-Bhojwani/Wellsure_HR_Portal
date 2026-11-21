@@ -101,10 +101,10 @@ function EditSelfServiceDrawer({ open, profile, onClose }: { open: boolean; prof
   const [form] = Form.useForm();
   const mutation = useMutation({
     mutationFn: (values: Record<string, unknown>) => employeeApi.updateSelfService(values),
-    onSuccess: () => {
+    onSuccess: (r) => {
       void queryClient.invalidateQueries({ queryKey: ["employees", "me"] });
       onClose();
-      toast.success("Updated.");
+      toast.success(r.pendingConfirmation ? "Sent for confirmation: as a director, your details change only when the other director confirms them." : "Updated.");
     },
     onError: (err) => toast.error(errorMessage(err, "Could not update.")),
   });

@@ -61,6 +61,9 @@ export function ReadyPage() {
           />
         )}
         <StandardValuesPanel />
+        {(data.dangers ?? []).map((d) => (
+          <Alert key={d.itemId} type="error" showIcon data-testid="single-director-row" title={`One director decides alone: ${d.title}`} description={<>{d.danger} <Link to={d.where.path}>{d.where.label}</Link></>} />
+        ))}
         {(data.warnings ?? []).filter((w) => w.itemId !== "pack:status").map((w) => (
           <Alert key={w.itemId} type="warning" showIcon title={`Warning (does not block the first run): ${w.title}`} description={<>{w.warning} <Link to={w.where.path}>{w.where.label}</Link></>} />
         ))}

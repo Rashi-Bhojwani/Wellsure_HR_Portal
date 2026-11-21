@@ -1130,6 +1130,8 @@ export interface Readiness {
   blockers: Array<{ itemId: string; section: string; sectionTitle: string; title: string; status: SetupStatus; missing: string; where: { label: string; path: string } }>;
   /** Prominent, non-blocking: they never turn Ready red. */
   warnings?: Array<{ itemId: string; title: string; warning: string; where: { label: string; path: string } }>;
+  /** FIX-H4 (independent audit 2026-11-20): red rows, one per pay step a single director decides alone, for as long as it is on. */
+  dangers?: Array<{ itemId: string; title: string; danger: string; where: { label: string; path: string } }>;
   notRequiredYet: Array<{ itemId: string; title: string; status: SetupStatus; reason: string }>;
   /** D-37: behaviour settings, informational rows only. */
   behaviours?: Array<{ itemId: string; title: string; state: "DEFAULT" | "CONFIRMED" | "NOT_SET"; label: string | null; detail: string; where: { label: string; path: string } }>;

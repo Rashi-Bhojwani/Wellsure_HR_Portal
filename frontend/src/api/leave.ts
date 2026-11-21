@@ -261,8 +261,10 @@ export interface ManualGrantResult {
   remarks: string | null;
 }
 
-export async function manualGrant(input: { employeeId: string; leaveTypeId: string; days: number; entryDate: string; remarks?: string }): Promise<ManualGrantResult> {
-  const { data } = await apiClient.post<ManualGrantResult>("/api/leave/grants", input);
+// FIX-C3 (independent audit 2026-11-20): a grant, debit or comp-off credit is a proposal; a director who did not propose it confirms it (Waiting for Confirmation).
+export interface LeaveChangeProposed { id: string; status: "PENDING"; summary: string; pendingConfirmation: true }
+export async function manualGrant(input: { employeeId: string; leaveTypeId: string; days: number; entryDate: string; remarks?: string }): Promise<LeaveChangeProposed> {
+  const { data } = await apiClient.post<LeaveChangeProposed>("/api/leave/grants", input);
   return data;
 }
 
@@ -276,8 +278,8 @@ export interface CompOffCreditRow {
   source: "MANUAL_GRANT" | "ATTENDANCE";
 }
 
-export async function manualCompOffGrant(input: { employeeId: string; earnedDate: string; hoursWorked: number; remarks?: string }): Promise<CompOffCreditRow> {
-  const { data } = await apiClient.post<CompOffCreditRow>("/api/leave/comp-off/grant", input);
+export async function manualCompOffGrant(input: { employeeId: string; earnedDate: string; hoursWorked: number; remarks?: string }): Promise<LeaveChangeProposed> {
+  const { data } = await apiClient.post<LeaveChangeProposed>("/api/leave/comp-off/grant", input);
   return data;
 }
 

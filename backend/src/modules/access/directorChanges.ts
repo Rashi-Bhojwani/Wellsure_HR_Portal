@@ -82,7 +82,7 @@ export async function proposeDirectorChange(
   const who = await labelOf(target.id);
   const text = `${ACTION_TEXT[input.action]} ${who}${input.roleCode ? ` (${input.roleCode})` : ""}`;
   await writeAuditLog({ actorUserId: actor.userId, ipAddress: meta.ipAddress ?? null, userAgent: meta.userAgent ?? null, action: "director.role_change.proposed", entityType: "DirectorRoleChange", entityId: row.id, after: { action: input.action, targetUserId: target.id, roleCode: input.roleCode ?? null, reason: input.reason } });
-  await notifyDirectors({ type: "director.role_change_pending", title: "A change to who is a director waits for confirmation", body: `A director proposed to ${text}. It takes effect only when ${directors.length >= 2 && input.action === "GRANT_SUPER_ADMIN" ? "every other director confirms" : "the other director confirms"}.`, link: "/admin/roles?tab=director-changes", payload: { changeId: row.id } });
+  await notifyDirectors({ type: "director.role_change_pending", title: "A change to who is a director waits for confirmation", body: `A director proposed to ${text}. It takes effect only when ${directors.length >= 2 && input.action === "GRANT_SUPER_ADMIN" ? "every other director confirms" : "the other director confirms"}.`, link: "/admin/admin-tools/confirmations", payload: { changeId: row.id } });
   await raiseSecurityEvent({ kind: "director.role_change_proposed", targetUserId: actor.userId, summary: `A director proposed to ${text}.`, details: { changeId: row.id, action: input.action } });
   return { pendingConfirmation: true as const, id: row.id, action: input.action };
 }
@@ -140,7 +140,7 @@ export async function confirmDirectorChange(id: string, actor: DirectorChangeAct
     disconnectUserSockets(outcome.target.employeeId);
   }
   await notifyAccessChanged([outcome.target]);
-  await notifyDirectors({ type: "director.role_change_applied", title: "A change to who is a director took effect", body: `Confirmed by a second director: ${text}.`, link: "/admin/roles?tab=director-changes", payload: { changeId: id } });
+  await notifyDirectors({ type: "director.role_change_applied", title: "A change to who is a director took effect", body: `Confirmed by a second director: ${text}.`, link: "/admin/admin-tools/confirmations", payload: { changeId: id } });
   await raiseSecurityEvent({ kind: "director.role_change_applied", targetUserId: actor.userId, summary: `A change to who is a director took effect: ${text}.`, details: { changeId: id, action: outcome.c.action } });
   return { applied: true as const, id };
 }
@@ -150,7 +150,7 @@ export async function rejectDirectorChange(id: string, note: string, actor: Dire
   const { count } = await prisma.directorRoleChange.updateMany({ where: { id, status: "PENDING" }, data: { status: "REJECTED", decidedByUserId: actor.userId, decidedAt: new Date(), decisionNote: note } });
   if (count === 0) throw new HttpError(409, "This change has already been decided, or does not exist.", "ALREADY_DECIDED");
   await writeAuditLog({ actorUserId: actor.userId, ipAddress: meta.ipAddress ?? null, userAgent: meta.userAgent ?? null, action: "director.role_change.rejected", entityType: "DirectorRoleChange", entityId: id, after: { note } });
-  await notifyDirectors({ type: "director.role_change_rejected", title: "A proposed change to who is a director was turned down", body: note, link: "/admin/roles?tab=director-changes", payload: { changeId: id } });
+  await notifyDirectors({ type: "director.role_change_rejected", title: "A proposed change to who is a director was turned down", body: note, link: "/admin/admin-tools/confirmations", payload: { changeId: id } });
   return { id, status: "REJECTED" as const };
 }
 

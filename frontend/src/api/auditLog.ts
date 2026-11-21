@@ -34,6 +34,8 @@ export interface AuditLogPage {
   pageSize: number;
   /** True for the Developer role: who, what, when and the record type only; every value withheld by the server. */
   valuesHidden?: boolean;
+  /** FIX-H4 (independent audit 2026-11-20): pay steps one director currently decides alone (step names only). */
+  singleDirectorSteps?: string[];
   rows: AuditLogRow[];
 }
 

@@ -34,7 +34,7 @@ function ManualGrantTab() {
     mutationFn: (val: ManualGrantFormValues) => leaveApi.manualGrant({ employeeId: val.employeeId, leaveTypeId: val.leaveTypeId, days: val.days, entryDate: val.entryDate.format("YYYY-MM-DD"), remarks: val.remarks }),
     onSuccess: (r) => {
       void queryClient.invalidateQueries({ queryKey: ["leave", "balances"] });
-      toast.success(`${r.entryType === "GRANT" ? "Credited" : "Debited"} ${Math.abs(r.days)} day(s) of ${r.leaveTypeCode}.`);
+      toast.success(`Sent for confirmation: ${r.summary}. A director who did not propose it confirms it; the balance changes then.`);
       form.resetFields();
     },
     onError: (err) => toast.error(errorMessage(err, "Could not record this grant/debit.")),
@@ -45,7 +45,7 @@ function ManualGrantTab() {
       <ApprovalBanner
         tone="info"
         title="A positive number credits the balance, a negative number debits it."
-        description="For comp-off, use the Comp-Off Grant tab instead — it needs hours worked to compute expiry."
+        description="Nothing changes until a director who did not propose it confirms it (Admin Tools, Waiting for Confirmation). Nobody grants leave to themselves. For comp-off, use the Comp-Off Grant tab — it needs hours worked to compute expiry."
         style={{ marginBottom: space[5] }}
       />
       <Form form={form} layout="vertical" requiredMark={false} size="large" onFinish={(val) => mutation.mutate(val)}>
@@ -99,7 +99,7 @@ function CompOffGrantTab() {
   const mutation = useMutation({
     mutationFn: (val: CompOffGrantFormValues) => leaveApi.manualCompOffGrant({ employeeId: val.employeeId, earnedDate: val.earnedDate.format("YYYY-MM-DD"), hoursWorked: val.hoursWorked, remarks: val.remarks }),
     onSuccess: (r) => {
-      toast.success(`Credited 1 comp-off day, expiring ${r.expiresOn}.`);
+      toast.success(`Sent for confirmation: ${r.summary}. A director confirms it before it is credited.`);
       form.resetFields(["earnedDate", "hoursWorked", "remarks"]);
       void refetch();
     },

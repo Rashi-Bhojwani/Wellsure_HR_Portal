@@ -155,7 +155,7 @@ export function ImportDatasetTab({ dataset }: { dataset: ImportDataset }) {
   const commitMutation = useMutation({
     mutationFn: () => importApi.commitBatch(batchId!, isBank ? confirmText : undefined),
     onSuccess: async (r) => {
-      toast.success(`Committed ${r.committedRows} row(s).`);
+      toast.success(r.pendingConfirmation ? "Sent for confirmation: a leave import changes balances only when a director who did not upload it confirms it." : `Committed ${r.committedRows} row(s).`);
       setResult(await importApi.getBatch(batchId!));
       void queryClient.invalidateQueries({ queryKey: ["import", "batches", dataset] });
     },

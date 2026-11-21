@@ -48,8 +48,13 @@ export function EmployeeAccessTab({ employeeId }: { employeeId: string }) {
   const roleChange = useMutation({
     mutationFn: (vars: { op: "add" | "remove"; code: string }) => (vars.op === "add" ? accessApi.assignRole(employeeId, vars.code) : accessApi.removeRole(employeeId, vars.code)),
     onSuccess: (a, vars) => {
-      applied(a);
-      toast.success(vars.op === "add" ? "Role added." : "Role removed.");
+      if (accessApi.isPending(a)) {
+        applied();
+        toast.success("Sent to the other director. A change to who is a director takes effect only when they confirm it (Admin Tools, Waiting for Confirmation).");
+      } else {
+        applied(a);
+        toast.success(vars.op === "add" ? "Role added." : "Role removed.");
+      }
       setRemovingRole(null);
     },
     onError: (err) => toast.error(apiErrorMessage(err, "Couldn't change the role.")),
@@ -57,6 +62,12 @@ export function EmployeeAccessTab({ employeeId }: { employeeId: string }) {
   const runPrompt = useMutation({
     mutationFn: (reason: string) => prompt!.run(reason),
     onSuccess: (a) => {
+      if (accessApi.isPending(a)) {
+        applied();
+        toast.success("Sent to the other director: this takes effect only when they confirm it.");
+        setPrompt(null);
+        return;
+      }
       applied(a as EmployeeAccess | void);
       toast.success(prompt!.success);
       setPrompt(null);

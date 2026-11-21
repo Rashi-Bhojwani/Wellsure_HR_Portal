@@ -359,11 +359,14 @@ export async function listIdentityChanges(params: { status?: IdentityChangeStatu
 export const confirmIdentityChange = async (id: string) => (await apiClient.post(`/api/employees/identity-changes/${id}/confirm`, {})).data;
 export const rejectIdentityChange = async (id: string, reason: string) => (await apiClient.post(`/api/employees/identity-changes/${id}/reject`, { reason })).data;
 export const withdrawIdentityChange = async (id: string) => (await apiClient.post(`/api/employees/identity-changes/${id}/withdraw`, {})).data;
-export async function updatePersonal(id: string, input: Record<string, unknown>): Promise<void> {
-  await apiClient.patch(`/api/employees/${id}/personal`, input);
+// FIX-C1 (independent audit 2026-11-20): a sign-in email change, and any change to a director's own details, waits for a director's confirmation (202).
+export async function updatePersonal(id: string, input: Record<string, unknown>): Promise<{ pendingConfirmation: boolean }> {
+  const res = await apiClient.patch(`/api/employees/${id}/personal`, input);
+  return { pendingConfirmation: res.status === 202 };
 }
-export async function updateSelfService(input: { currentAddress?: string; permanentAddress?: string; emergencyContactName?: string; emergencyContactPhone?: string; emergencyContactRelation?: string }): Promise<void> {
-  await apiClient.patch("/api/employees/me", input);
+export async function updateSelfService(input: { currentAddress?: string; permanentAddress?: string; emergencyContactName?: string; emergencyContactPhone?: string; emergencyContactRelation?: string }): Promise<{ pendingConfirmation: boolean }> {
+  const res = await apiClient.patch("/api/employees/me", input);
+  return { pendingConfirmation: res.status === 202 };
 }
 
 // ── Change requests ──────────────────────────────────────────────────────

@@ -92,6 +92,7 @@ const HelpdeskCategoriesPage = lazyPage(() => import("../pages/admin/helpdesk/He
 const AdminTasksPage = lazyPage(() => import("../pages/admin/tasks/AdminTasksPage"), "AdminTasksPage");
 const LetterTemplatesPage = lazyPage(() => import("../pages/admin/letters/LetterTemplatesPage"), "LetterTemplatesPage");
 const RolesPermissionsPage = lazyPage(() => import("../pages/admin/adminTools/RolesPermissionsPage"), "RolesPermissionsPage");
+const ConfirmationsPage = lazyPage(() => import("../pages/admin/adminTools/ConfirmationsPage"), "ConfirmationsPage"); // FIX (independent audit 2026-11-20)
 const HrCapabilitiesPage = lazyPage(() => import("../pages/admin/adminTools/HrCapabilitiesPage"), "HrCapabilitiesPage");
 const WorkflowDelegatesAdminPage = lazyPage(() => import("../pages/admin/adminTools/WorkflowDelegatesAdminPage"), "WorkflowDelegatesAdminPage");
 const ReportsHomePage = lazyPage(() => import("../pages/admin/reports/ReportsHomePage"), "ReportsHomePage");
@@ -474,6 +475,7 @@ export const adminApps: AdminApp[] = [
           { key: "week-off-patterns", label: "Week-off Patterns", path: "admin-tools/week-offs", icon: CalendarOutlined, element: WeekOffPatternsPage, needs: { any: ["attendance.config.manage"] } },
           { key: "leave-types-policies", label: "Leave Types & Policies", path: "admin-tools/leave-policies", icon: SolutionOutlined, element: LeaveTypesPoliciesPage, needs: { any: ["leave.policy.manage"] } },
           { key: "workflow-delegates-admin", label: "Workflow Delegates", path: "admin-tools/delegates", icon: UserSwitchOutlined, element: WorkflowDelegatesAdminPage, needs: { any: ["delegation.manage"] } },
+          { key: "confirmations", label: "Waiting for Confirmation", path: "admin-tools/confirmations", icon: SafetyCertificateOutlined, element: ConfirmationsPage, needs: { any: ["leave.grant", "employee.edit"], noDeveloper: true } }, // FIX C1/C2/C3/H2
           { key: "users-roles", label: "Roles & Permissions", path: "admin-tools/users-roles", icon: TeamOutlined, element: RolesPermissionsPage, needs: { any: ["role.view"] } },
           { key: "hr-capabilities", label: "What HR Can Do", path: "admin-tools/hr-capabilities", icon: SafetyOutlined, element: HrCapabilitiesPage, needs: { director: true } },
           { key: "managers", label: "Manager Management", path: "admin-tools/managers", icon: ApartmentOutlined, element: ManagerManagementPage, needs: { any: ["manager.appoint", "manager.team.assign", "manager.permissions.manage"] } },

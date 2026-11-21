@@ -36,7 +36,7 @@ async function record(kind: LeaveChangeKind, payload: Record<string, unknown>, t
   const row = await prisma.leaveChangeRequest.create({ data: { kind, payload: payload as Prisma.InputJsonValue, targetEmployeeIds: targets, summary, proposedByUserId, importBatchId: importBatchId ?? null } });
   await writeAuditLog({ actorUserId: proposedByUserId, ipAddress: meta.ipAddress ?? null, userAgent: meta.userAgent ?? null, action: "leave.change.proposed", entityType: "LeaveChangeRequest", entityId: row.id, after: { kind, summary, targets: targets.length } });
   await notifyDirectors(
-    { type: "director.leave_change_pending", title: "A leave change waits for a director's confirmation", body: `${summary}. It changes no balance until a director who did not propose it confirms it.`, link: "/admin/workforce/leave-granter?tab=pending", payload: { requestId: row.id } },
+    { type: "director.leave_change_pending", title: "A leave change waits for a director's confirmation", body: `${summary}. It changes no balance until a director who did not propose it confirms it.`, link: "/admin/admin-tools/confirmations", payload: { requestId: row.id } },
     { exceptUserId: proposedByUserId },
   );
   return { id: row.id, status: row.status, summary, pendingConfirmation: true as const };
@@ -118,7 +118,7 @@ export async function confirmRequest(id: string, actor: LeaveChangeActor, meta: 
   );
   await writeAuditLog({ actorUserId: actor.userId, ipAddress: meta.ipAddress ?? null, userAgent: meta.userAgent ?? null, action: "leave.change.confirmed", entityType: "LeaveChangeRequest", entityId: id, after: { kind: result.req.kind, summary: result.req.summary, proposedBy: result.req.proposedByUserId } });
   const proposer = await prisma.user.findUnique({ where: { id: result.req.proposedByUserId }, select: { employeeId: true } });
-  if (proposer) await notifyEmployee(proposer.employeeId, { type: "director.leave_change_decided", title: "Your leave change was confirmed", body: result.req.summary, link: "/admin/workforce/leave-granter?tab=pending" });
+  if (proposer) await notifyEmployee(proposer.employeeId, { type: "director.leave_change_decided", title: "Your leave change was confirmed", body: result.req.summary, link: "/admin/admin-tools/confirmations" });
   return { id, status: "CONFIRMED" as const, result: result.outcome };
 }
 

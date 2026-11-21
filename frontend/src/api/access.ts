@@ -53,13 +53,16 @@ export async function getEmployeeAccess(employeeId: string): Promise<EmployeeAcc
   return data;
 }
 
-export async function assignRole(employeeId: string, code: string): Promise<EmployeeAccess> {
-  const { data } = await apiClient.post<EmployeeAccess>(`/api/access/employees/${employeeId}/roles`, { code });
+// FIX-C2 (independent audit 2026-11-20): a change that makes or is about a director is a proposal the other director confirms (202).
+export interface PendingConfirmation { pendingConfirmation: true; id: string }
+export const isPending = (x: unknown): x is PendingConfirmation => !!x && typeof x === "object" && (x as { pendingConfirmation?: boolean }).pendingConfirmation === true;
+export async function assignRole(employeeId: string, code: string, opts: { thirdDirector?: boolean } = {}): Promise<EmployeeAccess | PendingConfirmation> {
+  const { data } = await apiClient.post<EmployeeAccess | PendingConfirmation>(`/api/access/employees/${employeeId}/roles`, { code, ...(opts.thirdDirector ? { thirdDirector: true, reason: "Add a third director" } : {}) });
   return data;
 }
 
-export async function removeRole(employeeId: string, code: string): Promise<EmployeeAccess> {
-  const { data } = await apiClient.delete<EmployeeAccess>(`/api/access/employees/${employeeId}/roles/${encodeURIComponent(code)}`);
+export async function removeRole(employeeId: string, code: string): Promise<EmployeeAccess | PendingConfirmation> {
+  const { data } = await apiClient.delete<EmployeeAccess | PendingConfirmation>(`/api/access/employees/${employeeId}/roles/${encodeURIComponent(code)}`);
   return data;
 }
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
-import { Button, DatePicker, Input } from "antd";
+import { Alert, Button, DatePicker, Input } from "antd";
 import { ArrowRightOutlined, DownloadOutlined } from "@ant-design/icons";
 import { useAuth } from "../../../hooks/useAuth";
 import { saveBlob } from "../../../api/muster";
@@ -114,6 +114,9 @@ export function AuditLogPage({ payroll = false }: { payroll?: boolean } = {}) {
           ) : undefined
         }
       />
+      {(data?.singleDirectorSteps ?? []).length > 0 && (
+        <Alert type="error" showIcon data-testid="single-director-banner" style={{ marginBottom: space[4] }} title="One director decides some pay steps alone" description={`Both directors switched this on for: ${(data?.singleDirectorSteps ?? []).join(", ")}. It stays shown here for as long as it is on, and never applies to a director's own pay, leave, bank or role.`} />
+      )}
       <Stack>
         <Panel>
           <FilterBar

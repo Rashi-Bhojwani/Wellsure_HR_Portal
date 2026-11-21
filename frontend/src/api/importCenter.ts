@@ -64,8 +64,8 @@ export async function downloadErrorReport(id: string): Promise<Blob> {
   return data as Blob;
 }
 
-export async function commitBatch(id: string, confirmText?: string): Promise<{ committedRows: number }> {
-  const { data } = await apiClient.post<{ committedRows: number }>(`/api/import/batches/${id}/commit`, { confirmText });
+export async function commitBatch(id: string, confirmText?: string): Promise<{ committedRows: number; pendingConfirmation?: boolean; requestId?: string }> {
+  const { data } = await apiClient.post<{ committedRows: number; pendingConfirmation?: boolean; requestId?: string }>(`/api/import/batches/${id}/commit`, { confirmText });
   return data;
 }
 

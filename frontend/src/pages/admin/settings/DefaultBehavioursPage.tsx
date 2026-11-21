@@ -29,6 +29,9 @@ function describe(b: Pick<Behaviour, "key" | "value">, leaveTypeNames: ReadonlyM
   if (b.key === "auth.passwordResetLinkMinutes") return `A Forgot-password link works for ${String(b.value)} minutes, once`;
   if (b.key === "auth.staySignedInDays") return `A person stays signed in for ${String(b.value)} day(s) on a device, renewed each time it is used`;
   if (b.key === "payroll.ctcIncludesEmployerStatutory") return v === true ? "On: CTC = gross + employer PF + employer ESI" : "Off: CTC is gross pay only";
+  // FIX (independent audit 2026-11-20): the five settings the audit fixes add.
+  if (b.key in FIX_BOOLEANS) return v === true ? FIX_BOOLEANS[b.key]![0] : FIX_BOOLEANS[b.key]![1];
+  if (b.key === "auth.loginIpFailureLimit") return v && typeof v === "object" ? `${String(v.maxAttempts)} failed sign-ins in ${Math.round(Number(v.windowSeconds) / 60)} minutes from one address` : "100 failed sign-ins in 15 minutes";
   if (b.key === "access.developerSeesSwipes") return v === true ? "On: the Developer role sees Employee Swipes" : "Off: the Developer role does not see Employee Swipes";
   if (b.key === "letters.employeeMayAsk") return Array.isArray(v) && v.length ? `Employees may ask for: ${v.join(", ")}` : "None: employees cannot ask for a letter";
   if (b.key === "identity.directorConfirmsHrChanges") return v === true ? "On: a director confirms HR's bank and statutory changes before they take effect" : "Off: HR's bank and statutory changes take effect at once";
@@ -83,7 +86,14 @@ const STATE_OPTIONS = Object.entries(COMPANY_STATES).map(([value, label]) => ({ 
 
 const ROUND_LABEL: Record<string, string> = { HALF_UP: "Half up", HALF_EVEN: "Half even", UP: "Up", DOWN: "Down", CEIL: "Ceiling", FLOOR: "Floor" };
 
-type FormValues = { reason: string; stateKey?: string; leaveTypeId?: string; months?: number; allowance?: string; retentionDays?: number; effectiveFrom?: string; minYears?: string; partYear?: string; daysPerYear?: string; divisor?: string; ceiling?: string; noticeDays?: number; recoverShortfall?: string; payHead?: string; rateMode?: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string; exitLeaveTypes?: string[]; divisorKind?: string; divisorDays?: string; codes?: string[]; roundMode?: string; scale?: number; minutes?: number; days?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
+// FIX (independent audit 2026-11-20): on/off settings the audit fixes add: [text when on, text when off, field label].
+const FIX_BOOLEANS: Record<string, [string, string, string]> = {
+  "auth.directorTwoFactorCompulsory": ["On: both directors must use two-step sign-in", "Off: two-step sign-in is optional for directors", "Two-step sign-in is compulsory for the directors"],
+  "auth.loginEmailChangeNeedsDirector": ["On: a director confirms every change to a sign-in email", "Off: a director's change to someone's sign-in email applies at once (HR's still waits)", "A change to someone's sign-in email waits for a director"],
+  "lateness.waiverNeedsDirector": ["On: HR approves a lateness waiver, a director confirms it", "Off: HR's approval of a lateness waiver is final", "Lateness waivers need a director's confirmation"],
+  "people.directoryShowsPersonalEmail": ["On: colleagues see personal emails in the directory", "Off: personal emails are never shown in the directory", "Colleagues see a personal email in the directory"],
+};
+type FormValues = { maxAttempts?: number; windowMinutes?: number; reason: string; stateKey?: string; leaveTypeId?: string; months?: number; allowance?: string; retentionDays?: number; effectiveFrom?: string; minYears?: string; partYear?: string; daysPerYear?: string; divisor?: string; ceiling?: string; noticeDays?: number; recoverShortfall?: string; payHead?: string; rateMode?: string; perHour?: string; multiplier?: string; basisHeads?: string[]; hoursPerMonth?: string; exitLeaveTypes?: string[]; divisorKind?: string; divisorDays?: string; codes?: string[]; roundMode?: string; scale?: number; minutes?: number; days?: number; on?: string; mode?: string; minDays?: number; percent?: string; sourceNote?: string; rules?: Array<{ typeKey: string; rule: string }> };
 
 export function DefaultBehavioursPage() {
   const queryClient = useQueryClient();
@@ -102,7 +112,8 @@ export function DefaultBehavioursPage() {
     mutationFn: (v: FormValues) => {
       const key = editing!.key as BehaviourKey;
       const value =
-        key === "access.developerSeesSwipes" || key === "identity.directorConfirmsHrChanges" ? v.on === "on"
+        key === "access.developerSeesSwipes" || key === "identity.directorConfirmsHrChanges" || key in FIX_BOOLEANS ? v.on === "on"
+        : key === "auth.loginIpFailureLimit" ? { maxAttempts: v.maxAttempts, windowSeconds: (v.windowMinutes ?? 15) * 60 }
         : key === "letters.employeeMayAsk" ? (v.codes ?? [])
         : key === "leave.leavingMonthAccrual" ? (v.mode === "FULL_IF_MIN_DAYS" ? { mode: v.mode, minDays: v.minDays } : { mode: v.mode })
         : key === "loan.maxTotalDeductionPercent" ? { percent: v.percent, sourceNote: v.sourceNote }
@@ -130,7 +141,8 @@ export function DefaultBehavioursPage() {
     setEditing(b);
     form.resetFields();
     const v = b.value as Record<string, unknown> | boolean | null;
-    if (b.key === "access.developerSeesSwipes" || b.key === "identity.directorConfirmsHrChanges" || b.key === "payroll.ctcIncludesEmployerStatutory") form.setFieldsValue({ on: v === true ? "on" : "off" });
+    if (b.key === "access.developerSeesSwipes" || b.key === "identity.directorConfirmsHrChanges" || b.key === "payroll.ctcIncludesEmployerStatutory" || b.key in FIX_BOOLEANS) form.setFieldsValue({ on: v === true ? "on" : "off" });
+    if (b.key === "auth.loginIpFailureLimit") { const l = (v as { maxAttempts?: number; windowSeconds?: number } | null) ?? {}; form.setFieldsValue({ maxAttempts: l.maxAttempts ?? 100, windowMinutes: Math.round((l.windowSeconds ?? 900) / 60) }); }
     if (b.key === "statutory.state" && typeof b.value === "string") form.setFieldsValue({ stateKey: b.value });
     if ((b.key === "leave.earnedLeaveType" || b.key === "leave.compOffType") && typeof b.value === "string") form.setFieldsValue({ leaveTypeId: b.value });
     if (b.key === "statutory.reviewIntervalMonths" && typeof b.value === "number") form.setFieldsValue({ months: b.value });
@@ -193,6 +205,17 @@ export function DefaultBehavioursPage() {
             <Form.Item name="on" label="The Developer role sees Employee Swipes" rules={[{ required: true }]}>
               <Select options={[{ value: "off", label: "Off" }, { value: "on", label: "On" }]} />
             </Form.Item>
+          )}
+          {editing && editing.key in FIX_BOOLEANS && (
+            <Form.Item name="on" label={FIX_BOOLEANS[editing.key]![2]} rules={[{ required: true }]}>
+              <Select options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} />
+            </Form.Item>
+          )}
+          {editing?.key === "auth.loginIpFailureLimit" && (
+            <>
+              <Form.Item name="maxAttempts" label="Failed sign-ins from one address (10 to 10000)" rules={[{ required: true }]}><InputNumber min={10} max={10000} style={{ width: "100%" }} /></Form.Item>
+              <Form.Item name="windowMinutes" label="Within (minutes, 1 to 1440)" rules={[{ required: true }]}><InputNumber min={1} max={1440} style={{ width: "100%" }} /></Form.Item>
+            </>
           )}
           {editing?.key === "letters.employeeMayAsk" && (
             <Form.Item name="codes" label="Letters an employee may ask for (none = nobody can ask)">

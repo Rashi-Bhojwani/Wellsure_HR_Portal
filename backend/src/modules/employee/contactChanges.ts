@@ -43,7 +43,7 @@ async function record(kind: ContactChangeKind, employeeId: string, targetUserId:
   const row = await prisma.contactChangeRequest.create({ data: { kind, employeeId, targetUserId, changes: changes as Prisma.InputJsonValue, source, proposedByUserId } });
   await writeAuditLog({ ...meta, action: "contact.change.proposed", entityType: "ContactChangeRequest", entityId: row.id, after: { kind, employeeId, fields: Object.keys(changes), source } });
   await tellOldAddress(t.oldEmail, t.name, `A change to your ${LABEL[kind]} was requested. It takes effect only when a director confirms it`);
-  await notifyDirectors({ type: "security.contact_change_pending", title: `A change to a ${LABEL[kind]} waits for confirmation`, body: `Employee ${t.employee.employeeCode}: ${Object.keys(changes).join(", ")}. It takes effect only when ${kind === "DIRECTOR_RECORD" ? "the other director" : "a director who did not make it"} confirms it.`, link: "/admin/employees/contact-changes", payload: { requestId: row.id } });
+  await notifyDirectors({ type: "security.contact_change_pending", title: `A change to a ${LABEL[kind]} waits for confirmation`, body: `Employee ${t.employee.employeeCode}: ${Object.keys(changes).join(", ")}. It takes effect only when ${kind === "DIRECTOR_RECORD" ? "the other director" : "a director who did not make it"} confirms it.`, link: "/admin/admin-tools/confirmations", payload: { requestId: row.id } });
   return row.id;
 }
 
@@ -68,7 +68,7 @@ export async function routePersonalUpdate(employeeId: string, input: PersonalInp
   const actorIsDirector = !actorIsTarget && (await isDirector(meta.actorUserId));
   if (!needsDirector && actorIsDirector) {
     await tellOldAddress(t.oldEmail, t.name, "Your sign-in email was changed by a director");
-    await notifyDirectors({ type: "security.contact_change_applied", title: "A sign-in email was changed", body: `Employee ${t.employee.employeeCode}: changed by a director (the setting lets a director change it without a second confirmation).`, link: "/admin/employees/contact-changes" });
+    await notifyDirectors({ type: "security.contact_change_applied", title: "A sign-in email was changed", body: `Employee ${t.employee.employeeCode}: changed by a director (the setting lets a director change it without a second confirmation).`, link: "/admin/admin-tools/confirmations" });
     return { direct: changed, pendingId: null };
   }
   const id = await record("LOGIN_EMAIL", employeeId, t.user?.id ?? null, { personalEmail }, source, meta.actorUserId, meta, t);
@@ -109,7 +109,7 @@ export async function confirmContactChange(id: string, actorUserId: string, meta
   }
   await writeAuditLog({ ...meta, actorUserId, action: "contact.change.applied", entityType: "ContactChangeRequest", entityId: id, after: { kind: row.kind, employeeId: row.employeeId, fields: Object.keys(changes), proposedBy: row.proposedByUserId } });
   await tellOldAddress(t.oldEmail, t.name, `Your ${LABEL[row.kind]} was changed (confirmed by a director)`);
-  await notifyDirectors({ type: "security.contact_change_applied", title: `A change to a ${LABEL[row.kind]} took effect`, body: `Employee ${t.employee.employeeCode}: ${Object.keys(changes).join(", ")}, confirmed by a director.`, link: "/admin/employees/contact-changes", payload: { requestId: id } });
+  await notifyDirectors({ type: "security.contact_change_applied", title: `A change to a ${LABEL[row.kind]} took effect`, body: `Employee ${t.employee.employeeCode}: ${Object.keys(changes).join(", ")}, confirmed by a director.`, link: "/admin/admin-tools/confirmations", payload: { requestId: id } });
   return { id, status: "APPLIED" as const };
 }
 
