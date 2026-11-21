@@ -209,6 +209,14 @@ export async function seedDemoCompany(): Promise<DemoResult> {
     await confirmRule(def.key, { version: c.version, ...(c.requiresRetype ? { typedValue: typed } : {}), note: "DEMO COMPANY: confirmed for the demo only", fingerprint: c.fingerprint }, { userId: checker });
   }
 
+  // FIX-M5 (independent audit 2026-11-20): the demo company loads professional tax and LWF tables, so its directors answer "Applies" for both (one proposes, the
+  // other confirms); minimum wages keep the development seed's answer. The demo is exempt from the blocking rows either way.
+  const { propose: proposeBehaviour, confirm: confirmBehaviour } = await import("../../src/modules/behaviours/service");
+  for (const key of ["statutory.professionalTax", "statutory.labourWelfareFund"]) {
+    const p = await proposeBehaviour(key, { value: "APPLIES", reason: "DEMO COMPANY: the demo loads made-up tables for this" }, { userId: maker });
+    await confirmBehaviour((p as { id: string }).id, { userId: checker });
+  }
+
   lap("before: rules done");
   // Components and a structure: BASIC is 40% of CTC, HRA is half of BASIC, SPECIAL balances.
   for (const [i, code] of ["DEMO_BASIC", "DEMO_HRA", "DEMO_SPECIAL"].entries()) {

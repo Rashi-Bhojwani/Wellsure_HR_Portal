@@ -171,7 +171,9 @@ export async function seedDemoPayActivity(): Promise<DemoActivityResult> {
     await call(SECOND, "post", `settlements/${s.id}/decision`, { fingerprint: s.fingerprint, decision: "APPROVE" });
     return s.id as string;
   };
-  const settlements = { paid: await settle(await leave("DEMO008"), "45000"), unpaid: await settle(await leave("DEMO011"), "20000") };
+  // Audit follow-up 2026-11-21: the paid settlement must stay positive on any day of the month. Notice recovery is up to 30 days of DEMO_BASIC (Rs 24,000) and the
+  // loan still owed is Rs 30,000, so a notice pay of Rs 45,000 went negative from about the 12th (NOTHING_PAYABLE); Rs 60,000 keeps it payable on every day.
+  const settlements = { paid: await settle(await leave("DEMO008"), "60000"), unpaid: await settle(await leave("DEMO011"), "20000") };
 
   // ── The paid settlement through an off-cycle run, its bank file written, downloaded and marked sent ──
   const payOn = iso(addCalendarDays(businessToday(), 3));
