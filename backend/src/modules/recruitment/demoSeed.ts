@@ -30,4 +30,10 @@ export async function seedDemoRecruitment(who:Record<string,{employeeId:string;u
  const application=await apply(candidate.id,d,{jobId:job.id},meta);
  const interview=await schedule(application.id,d,{round:'DEMO panel round',scheduledAt:new Date(Date.now()+86400000).toISOString(),panelEmployeeIds:[who.DEMO011!.employeeId,who.DEMO004!.employeeId]},meta);
  await submitFeedback(interview.id,await actor(who.DEMO011!),{answers:{DEMO_QUESTION:DEMO_FEEDBACK},recommendation:'DEMO_PROGRESS'},{actorUserId:who.DEMO011!.userId});
+ // Independent audit fix 2026-11-20: a second candidate with a DIFFERENT panel (DEMO006 only), so panel isolation can be seen in the demo company: DEMO011 and
+ // DEMO004 see only the first interview, DEMO006 only the second.
+ const second=await createCandidate(d,{name:'DEMO-C4-SECOND-CANDIDATE',email:'demo.c4.second@example.invalid',phone:'0000000005',source:'DEMO_INTERNAL',consentConfirmed:true,consentRecordedAt:new Date().toISOString()},meta);
+ const secondApplication=await apply(second.id,d,{jobId:job.id},meta);
+ const secondInterview=await schedule(secondApplication.id,d,{round:'DEMO second panel round',scheduledAt:new Date(Date.now()+2*86400000).toISOString(),panelEmployeeIds:[who.DEMO006!.employeeId]},meta);
+ await submitFeedback(secondInterview.id,await actor(who.DEMO006!),{answers:{DEMO_QUESTION:'DEMO-C4-SECOND-PANEL-FEEDBACK'},recommendation:'DEMO_STOP'},{actorUserId:who.DEMO006!.userId});
 }
