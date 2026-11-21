@@ -166,3 +166,10 @@ who enters payroll data month to month; whether a third Super Admin may approve 
 - [x] G4 bulk documents and photos (importers audit only) — `6397ad1` · [x] G5 mass email — `6ee5f12` · [x] G6 search — `7aa4520` · [x] G7 separation modes, portal access — `8fa2777`
 - [x] Full backend suite alone 201 files / 1,961 tests green; walkthrough director / HR (switch on, off) / employee, light, dark, phone; report in STAGE_REPORTS.md
 - [ ] Open: division (owners); A-3 letter figures (hook left); A-2 import rules (not on this branch)
+
+## Independent audit fix block (2026-11-20/21; report `AUDIT_FIX_REPORT.md`)
+- [x] Phase 1, critical and high: C1 `d7c7196` · C2/C3/H5/M7 `cbc1875` · H1 `7cdad24` · H2 `929eb3c` · H3 `c59faeb` · H4/T1 `b818d19` · screens `b4233a6` · phase check passed
+- [x] Phase 2, medium and low: M1 `d7c7196` `21ad644` `6527b2e` · M2 `33146b0` · M3 `d925427` · M4 `57f49dd` · M5 `c567cdf` · M6 `f3e7fb5` · M8 `72ef064` · M9 `9dfe103` · M10 `e482aa2` · L1 `4f06ec7` · L2 `7c69f5f` · L4 `62f3b99` · L5 `30598d3` · L6 `a8f2949` · L7 `65f032a` · phase check passed
+- [x] Extras: interviewer isolation `3e4b49e` · no pay figure in mail or notifications `f870889` · demo company on a fresh database `276805e` · permission matrix and route inventory `ba191ce`
+- [x] Phase 3, repository hygiene: C4 guard in CI and the check script `7f80175`; history not rewritten (listing in the report)
+- [ ] Deferred: H6 (infrastructure, backups, restore), L8, L9, L10, L11; Prisma 7 (the last four high advisories)

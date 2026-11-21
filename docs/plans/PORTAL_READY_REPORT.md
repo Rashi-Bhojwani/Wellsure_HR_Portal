@@ -230,3 +230,16 @@ what was not built in `docs/plans/AUDIT_FIXES.md`. Verification: `STAGE_REPORTS.
   changed;
 - the Developer no longer manages leave policies.
 Open, not caused by the merge: on Apply leave, the keyboard cannot move past the "From" date box. Report: `docs/plans/FINAL_MERGE_REPORT.md`.
+
+## 12. Independent audit fixes (written 2026-11-21)
+
+The independent pre-go-live audit of `5649ec3` found 4 critical, 6 high, 10 medium and 11 low findings and 2 test gaps. All are fixed on `peeps/foundation`
+except H6 (production infrastructure, backups and restore) and L8 to L11, which are deferred with reasons and estimates; C4's files are guarded against but
+not removed from history (the directors' decision). Every fix has a test that reproduces the audit's case and a mutation check. Full map, checks, the
+decisions I made and where the real-looking files still are: `docs/plans/AUDIT_FIX_REPORT.md`. Owner rows 155 to 168 of `OWNER_REVIEW_SHEET.md`.
+
+Owner to know before go-live:
+- **Answer Professional Tax, LWF and minimum wages** ("Does not apply to us" or "Applies"): until all three are answered, a real monthly run cannot be submitted.
+- Two directors decide every pay step by default, never one director on their own pay; who is a director, leave grants, sign-in email changes, resetting a director and lateness waivers each need a second director.
+- Two-step sign-in is compulsory for directors on a real database: both directors set it up first.
+- **Not ready for production until H6 is done** (infrastructure, backups, a tested restore, key backup); it needs the AWS answers in spec §14.
