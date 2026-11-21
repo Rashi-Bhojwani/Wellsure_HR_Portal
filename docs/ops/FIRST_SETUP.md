@@ -104,6 +104,7 @@ Open **Payroll → Setup Checklist**. It lists everything payroll needs, in eigh
 |---|---|---|
 | The company's registration numbers | Payroll → Rules and Setup (also Payroll → Company settings) | One director types each number from the letter. The other confirms by typing it again from the letter. |
 | Rates and limits set by law | Payroll → Rules and Setup | Some rates arrive pre-filled and marked unverified. Check each one against the current government notification, correct it if needed, and confirm. PT and LWF start empty. |
+| Professional Tax, LWF and minimum wages: do they apply? | Admin Tools → Default behaviours | For each, one director answers "Does not apply to us" or "Applies" and the other confirms (the reference values are shown beside the choice). "Applies" then needs its values (PT and LWF in Rules and Setup, minimum wages in Payroll → Minimum Wages). Until all three are answered, Ready for First Run shows a blocking row and a real monthly run cannot be submitted. |
 | Choices for your company | Payroll → Rules and Setup | Rounding, payment date, how a month is divided into days, and similar. |
 | Salary structures and their components | Payroll → Salary Components (your pay heads), then Salary Structures | One director creates; the other confirms. |
 | The bank file | Payroll → Bank and Statutory Layouts | Type the layout from your bank's own specification, plus the company account salaries are paid from. The other director confirms by typing the account again. **Then have your bank accept a test file.** |

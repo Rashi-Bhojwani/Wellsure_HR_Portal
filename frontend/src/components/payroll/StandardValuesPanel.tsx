@@ -121,7 +121,8 @@ export function StandardValuesPanel() {
             <ApprovalBanner
               tone="info"
               title="Professional tax, LWF, minimum wages and the final settlement rules are not standard values"
-              description={`The owners set them (state: ${p.state.label}). Until they are set, no PT or LWF is deducted and the run says "not set", and a final settlement is refused. See Default behaviours.`}
+              // FIX-M5 (independent audit 2026-11-20): Not set no longer means "deduct nothing and carry on".
+              description={`The owners set them (state: ${p.state.label}). For professional tax, LWF and minimum wages the directors first answer "Does not apply to us" or "Applies" (then enter its values) in Default behaviours: until each has an answer, a real monthly run cannot be submitted (the demo company is exempt). A final settlement is refused until its rules are set.`}
             />
             {p.reviewDue.length > 0 && (
               <ApprovalBanner
