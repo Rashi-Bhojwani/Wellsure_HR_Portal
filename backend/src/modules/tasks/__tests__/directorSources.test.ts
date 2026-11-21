@@ -66,11 +66,13 @@ describe("Tasks inbox: claims and held identity changes, directors only", () => 
   });
 
   it("a held bank change shows to a director who may decide it: not the one who entered it, not on their own record", async () => {
-    const held = await request(app)
-      .patch(`/api/employees/${u.d2!.employeeId}/bank`)
-      .set(...authHeader(t.hr!))
-      .send({ accountHolderName: "Made Up", accountNumber: "50000000007777", accountNumberConfirm: "50000000007777", ifsc: "TEST0000123", bankName: "Test Bank", branchName: "Test" });
-    expect(held.status).toBe(202);
+    const bank = { accountHolderName: "Made Up", accountNumber: "50000000007777", accountNumberConfirm: "50000000007777", ifsc: "TEST0000123", bankName: "Test Bank", branchName: "Test" };
+    // Changed 2026-11-21 (independent audit C1): HR can no longer enter a director's bank or identity details (403 DIRECTOR_RECORD_SELF_ONLY); the director enters
+    // their own and it is held for the other director. Same rule tested: offered to the director who may decide it, never to the one who entered it or whose record it is.
+    const byHr = await request(app).patch(`/api/employees/${u.d2!.employeeId}/bank`).set(...authHeader(t.hr!)).send(bank);
+    expect([byHr.status, byHr.body.error?.code]).toEqual([403, "DIRECTOR_RECORD_SELF_ONLY"]);
+    const held = await request(app).patch(`/api/employees/${u.d2!.employeeId}/bank`).set(...authHeader(t.d2!)).send(bank);
+    expect(held.status, JSON.stringify(held.body)).toBe(202);
     const forD1 = (await tasksOf("d1")).filter((x) => x.type === "IDENTITY_CONFIRMATION");
     expect(forD1.map((x) => x.id)).toContain(held.body.id);
     expect(JSON.stringify(forD1)).not.toContain("7777");

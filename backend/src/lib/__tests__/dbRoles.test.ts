@@ -84,6 +84,9 @@ describe("the app role", () => {
 
   it("keeps UPDATE (and only UPDATE) on the append-only tables whose rows change state: payroll approvals and bank batches", async () => {
     expect(UPDATABLE_APPEND_ONLY_TABLES).toEqual(["payroll_approvals", "bank_transfer_batches",
+      // Changed 2026-11-21 (independent audit C1, C2, C3): the three proposal tables move PENDING -> APPLIED/CONFIRMED or REJECTED once; each table's trigger refuses
+      // every other change (fixC1AccountTakeover, fixC2DirectorChanges, fixC3LeaveChanges).
+      "contact_change_requests", "director_role_changes", "leave_change_requests",
       // PEEPS-BEGIN recruitment
       "interview_feedback", // ciphertext maintenance only; row trigger keeps submitted content immutable.
       // PEEPS-END recruitment

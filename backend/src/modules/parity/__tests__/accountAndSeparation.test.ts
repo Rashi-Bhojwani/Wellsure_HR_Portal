@@ -92,8 +92,11 @@ describe("A-9 G7 — separation modes and portal access", () => {
 
   it("a director's own access only by another director, never your own", async () => {
     expect((await call("director", "post", `/api/access/employees/${p.director!.employeeId}/portal-access`, { enabled: false, reason: "myself" })).body.error.code).toBe("SELF");
+    // Changed 2026-11-21 (independent audit C2): suspending a director removes their director status, so another director's request is a proposal (202) that a
+    // second director confirms (fixC2DirectorChanges.test.ts); the director stays active meanwhile. The proposal is withdrawn here to leave nothing pending.
     const other = await call("director2", "post", `/api/access/employees/${p.director!.employeeId}/portal-access`, { enabled: false, reason: "made-up test" });
-    expect(other.status, JSON.stringify(other.body)).toBe(200);
-    await call("director2", "post", `/api/access/employees/${p.director!.employeeId}/portal-access`, { enabled: true, reason: "made-up test" });
+    expect([other.status, other.body.pendingConfirmation, other.body.action], JSON.stringify(other.body)).toEqual([202, true, "SUSPEND"]);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: p.director!.userId } })).status).toBe("ACTIVE");
+    expect((await call("director2", "post", `/api/access/director-changes/${other.body.id}/reject`, { note: "made-up test: withdrawn" })).status).toBe(200);
   });
 });

@@ -28,11 +28,13 @@ describe("Leave — seeded role -> permission grants", () => {
     for (const key of LEAVE_PERMISSION_KEYS) expect(perms.has(key), key).toBe(key !== "leave.yearend.manage");
   });
 
-  it("HR_EXECUTIVE has view/approve/grant/onBehalf but not policy/recalculate/yearend (config & financial stays HR_ADMIN+)", async () => {
+  // Changed 2026-11-21 (independent audit C3): HR Executive gave themselves 15 days of paid leave; leave.grant moved to HR_ADMIN (and every grant is a proposal a
+  // director confirms). HR Executive keeps view, approve and apply on behalf.
+  it("HR_EXECUTIVE has view/approve/onBehalf but not grant/policy/recalculate/yearend (config & financial stays HR_ADMIN+)", async () => {
     const perms = await leavePermissionsFor("HR_EXECUTIVE");
     expect(perms.has("leave.view")).toBe(true);
     expect(perms.has("leave.approve")).toBe(true);
-    expect(perms.has("leave.grant")).toBe(true);
+    expect(perms.has("leave.grant")).toBe(false);
     expect(perms.has("leave.apply.onBehalf")).toBe(true);
     expect(perms.has("leave.policy.manage")).toBe(false);
     expect(perms.has("leave.recalculate")).toBe(false);

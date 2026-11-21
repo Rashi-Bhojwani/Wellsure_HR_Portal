@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp, trustProxyHopsFor } from "../../app";
 import { clearRateLimits } from "../../modules/auth/__tests__/authTestHelpers";
 import { redis } from "../../lib/redis";
+import { prisma } from "../../lib/prisma";
+import { deleteWithDependents } from "../../lib/__tests__/cleanup";
 
 // Behind the ALB the client's address is the entry the ALB appended to X-Forwarded-For; anything a client writes to the left of it is
 // the client's own claim. The login rate limit is keyed by req.ip, so a forged header must neither dodge it nor frame somebody else.
@@ -17,7 +19,21 @@ const attempt = (app: ReturnType<typeof createApp>, xff?: string) => {
   return xff ? r.set("X-Forwarded-For", xff) : r;
 };
 
+// Changed 2026-11-21 (independent audit H2): the per-address limit is now the directors' setting auth.loginIpFailureLimit, default 100 in 15 minutes (one office
+// shares an address). These tests set it to 10, the smallest it allows, so they keep proving the same thing about which address is counted.
+const IP_LIMIT_KEY = "auth.loginIpFailureLimit";
+const setIpLimit = async (value: { maxAttempts: number; windowSeconds: number } | null) => {
+  const existing = await prisma.behaviourProposal.findMany({ where: { key: IP_LIMIT_KEY }, select: { id: true } });
+  await deleteWithDependents("BehaviourProposal", existing.map((r) => r.id));
+  if (value) {
+    const p = await prisma.behaviourProposal.create({ data: { key: IP_LIMIT_KEY, value, reason: "test", proposedByUserId: "test-director-a" } });
+    await prisma.behaviourConfirmation.create({ data: { proposalId: p.id, confirmedByUserId: "test-director-b" } });
+  }
+};
+
 describe("trust proxy: exactly one hop", () => {
+  beforeAll(() => setIpLimit({ maxAttempts: 10, windowSeconds: 900 }));
+  afterAll(() => setIpLimit(null));
   beforeEach(clearRateLimits);
 
   it("defaults to one hop outside development and none in development", () => {

@@ -167,9 +167,10 @@ function loginIpKey(ip: string | null | undefined): string {
 }
 
 // FIX-H2 (independent audit 2026-11-20): an office reaches the internet through one address, so ten typos at 9:30 locked the whole branch out. The per-address
-// limit is now the two-director Default behaviour "auth.loginIpFailureLimit" (default 100 failures in 15 minutes), and it never refuses a sign-in for a number
-// that has no recent failures of its own: failures for other numbers from the same address do not block a correct password. A number with failures of its
-// own, from an address over its limit, gets the same "Too many attempts" reply as before (the reply rules are unchanged).
+// limit is now the two-director Default behaviour "auth.loginIpFailureLimit" (default 100 failures in 15 minutes, far above an office's typos); a director or
+// an HR Admin sees and clears a blocked address (Waiting for Confirmation), and unlocking an account clears the addresses it failed from. Over the limit,
+// every sign-in from that address waits, correct passwords included: exempting numbers with no failures of their own would let a password spray (one guess
+// against each of many numbers) run without any limit (found by trustProxy.test.ts in the final full run, 2026-11-21).
 export async function loginIpLimit(): Promise<{ maxAttempts: number; windowSeconds: number }> {
   return (await behaviourValue("auth.loginIpFailureLimit")).value;
 }
@@ -182,7 +183,7 @@ async function loginOverLimit(raw: string, ip: string | null | undefined): Promi
   const [forNumber, forIp] = await redis.mget(loginNumberKey(raw), loginIpKey(ip));
   const numberFailures = Number(forNumber ?? 0);
   if (numberFailures >= maxAttempts) return true;
-  return Number(forIp ?? 0) >= ipLimit.maxAttempts && numberFailures > 0;
+  return Number(forIp ?? 0) >= ipLimit.maxAttempts;
 }
 
 /** Counts one failed sign-in for the number typed and for the IP; returns the number's count. The same for every number, held or not. */

@@ -53,19 +53,20 @@ describe("FIX-H2: one office address never locks out the whole office", () => {
     expect((await login(bob.employeeCode, TEST_PASSWORD)).status).toBe(200);
   });
 
-  it("even with the address over its limit, a number with no failures of its own signs in; one with its own failures gets the same 'Too many attempts' reply", async () => {
+  // Changed 2026-11-21 (final full run): an address over its limit stops every sign-in from it, correct passwords included, so a password spray (one guess per
+  // number, each number fresh) is limited; the limit is far above an office's typos, and a director or an HR Admin clears it (next tests).
+  it("over its limit, an address waits for everyone (a password spray across fresh numbers is stopped), with the same 'Too many attempts' reply", async () => {
     await clearCounters();
     await setLimit(10);
     try {
       for (let i = 0; i < 10; i += 1) await login(`NOBODY-${i}`, "wrong-password");
+      const spray = await login("NOBODY-FRESH", "wrong-password");
+      expect([spray.status, spray.body.error.message]).toEqual([429, LOGIN_TOO_MANY_MESSAGE]);
+      const correct = await login(alice.employeeCode, TEST_PASSWORD);
+      expect([correct.status, correct.body.error.message]).toEqual([429, LOGIN_TOO_MANY_MESSAGE]);
+      expect(correct.body).toEqual(spray.body); // the reply never says whether the number exists or the password was right
+      await clearCounters();
       expect((await login(alice.employeeCode, TEST_PASSWORD)).status).toBe(200);
-      expect((await login(bob.employeeCode, "a-typo")).status).toBe(401);
-      const refused = await login(bob.employeeCode, TEST_PASSWORD);
-      expect([refused.status, refused.body.error.message]).toEqual([429, LOGIN_TOO_MANY_MESSAGE]);
-      // The over-limit reply is the same for a number nobody holds.
-      await login("NOBODY-X", "wrong");
-      const unknown = await login("NOBODY-X", "wrong");
-      expect([unknown.status, unknown.body.error.message]).toEqual([429, LOGIN_TOO_MANY_MESSAGE]);
     } finally {
       await setLimit(100);
     }
@@ -92,15 +93,12 @@ describe("FIX-H2: one office address never locks out the whole office", () => {
     await clearCounters();
     await setLimit(10);
     try {
+      const tAlice = (await login(alice.employeeCode, TEST_PASSWORD)).body.accessToken as string; // signed in before the address is blocked
       for (let i = 0; i < 10; i += 1) await login(`NOBODY-${i}`, "wrong-password");
       const list = await request(app).get("/api/access/login-blocks").set(...authHeader(tHr));
       expect(list.status).toBe(200);
       expect(list.body.blocks.length).toBe(1);
       expect((await request(app).get("/api/access/login-blocks").set(...authHeader(tDev))).status).toBe(403);
-      const tAlice = await (async () => {
-        const r = await login(alice.employeeCode, TEST_PASSWORD);
-        return r.body.accessToken as string;
-      })();
       expect((await request(app).get("/api/access/login-blocks").set(...authHeader(tAlice))).status).toBe(403);
       const ip = encodeURIComponent(list.body.blocks[0].ip);
       expect((await request(app).delete(`/api/access/login-blocks/${ip}`).set(...authHeader(tDev)).send({ reason: "nope" })).status).toBe(403);

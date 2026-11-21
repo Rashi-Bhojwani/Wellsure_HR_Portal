@@ -143,6 +143,8 @@ describe("Stage 8 — greytHR punch files", () => {
     expect((await preview(Buffer.from("x"), "a.dat", tok.emp!)).status).toBe(403);
     const swipes = await swipesFile([[p.alice.employeeCode, "Alice", "In", "Main Door", "08/01/2026 09:00"]]);
     const dev = await preview(swipes, "Attendance_Swipes.xlsx", tok.dev!);
-    expect([dev.status, dev.body.error?.code]).toEqual([403, "DEVELOPER_CEILING"]);
+    // Changed 2026-11-21 (independent audit C3/H5): the Developer firewall refuses every Developer write before the route's own ceiling check, so the code is
+    // DEVELOPER_VIEW_ONLY (was DEVELOPER_CEILING). Still 403, and nothing is loaded.
+    expect([dev.status, dev.body.error?.code]).toEqual([403, "DEVELOPER_VIEW_ONLY"]);
   });
 });
