@@ -333,7 +333,7 @@ export async function resolveSelection(input: RevisionInput, actorUserId: string
   const sel = input.selection;
   if (sel.kind === "EMPLOYEES") {
     ids = [...new Set(sel.employeeIds)];
-    await assertNotOwnPay(actorUserId, ids, "This revision");
+    await assertNotOwnPay(actorUserId, ids, "This revision", { proposal: true });
   } else {
     if (sel.kind === "BRANCH") ids = await employeeIdsPlacedOn(day, { locationId: sel.locationId });
     else if (sel.kind === "GRADE") ids = await employeeIdsPlacedOn(day, { gradeId: sel.gradeId });
@@ -460,7 +460,7 @@ export function cancelPlanToJson(p: CancelPlan) {
 
 export async function previewCancel(rawInput: unknown, actorUserId: string) {
   const input = cancelInputSchema.parse(rawInput);
-  await assertNotOwnPay(actorUserId, [input.employeeId], "This cancellation");
+  await assertNotOwnPay(actorUserId, [input.employeeId], "This cancellation", { proposal: true });
   const plan = await computeCancelPlan(input.employeeId, input.salaryId);
   const checkers = await checkersFor(actorUserId, [input.employeeId]);
   const blockers = plan.problems.map((m) => `${plan.name}: ${m}`);
@@ -470,7 +470,7 @@ export async function previewCancel(rawInput: unknown, actorUserId: string) {
 
 export async function createCancel(rawInput: unknown, fingerprint: string, actor: { userId: string; ip?: string | null }) {
   const input = cancelInputSchema.parse(rawInput);
-  await assertNotOwnPay(actor.userId, [input.employeeId], "This cancellation");
+  await assertNotOwnPay(actor.userId, [input.employeeId], "This cancellation", { proposal: true });
   const plan = await computeCancelPlan(input.employeeId, input.salaryId);
   if (fingerprint !== plan.hash) throw new HttpError(409, "This changed since you previewed it. Preview it again.", "PREVIEW_STALE");
   if (plan.problems.length) throw new HttpError(409, `This cannot be submitted yet: ${plan.problems[0]}`, "REVISION_BLOCKED", { blockers: plan.problems });
@@ -498,7 +498,7 @@ function cancelTarget(rev: { change: Prisma.JsonValue }): { employeeId: string; 
 
 async function applyCancel(rev: RevisionRow, actor: { userId: string; ip?: string | null }) {
   const { employeeId, salaryId } = cancelTarget(rev);
-  await assertNotOwnPay(actor.userId, [employeeId], "Applying this cancellation");
+  await assertNotOwnPay(actor.userId, [employeeId], "Applying this cancellation", { proposal: true });
   let planJson: ReturnType<typeof cancelPlanToJson> | null = null;
   await prisma.$transaction(async (tx) => {
     await lockEmployees(tx, [employeeId]);
@@ -632,7 +632,7 @@ export async function applyRevision(revisionId: string, actor: { userId: string;
   if (rev.appliedAt) throw new HttpError(409, "This revision has already been applied.", "CONFLICT");
   if (rev.withdrawnAt) throw new HttpError(409, "This revision was withdrawn.", "CONFLICT");
   if (rev.kind === "CANCEL_SCHEDULED") return applyCancel(rev, actor);
-  await assertNotOwnPay(actor.userId, rev.employeeIds as string[], "Applying this revision");
+  await assertNotOwnPay(actor.userId, rev.employeeIds as string[], "Applying this revision", { proposal: true });
   const written: Array<{ employeeId: string; salaryId: string; arrears: number }> = [];
 
   await prisma.$transaction(async (tx) => {

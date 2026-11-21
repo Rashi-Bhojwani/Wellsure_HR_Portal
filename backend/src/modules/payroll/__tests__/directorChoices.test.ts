@@ -42,39 +42,41 @@ describe("the choice for each payroll step: Not set, then either way", () => {
     expect([...DIRECTOR_CHOICE_REQUIRED_STEPS].sort()).toEqual(["BANK_FILE", "MONTHLY_INPUTS", "PAYSLIP_PUBLISH", "PERIOD_FINALISE", "PERIOD_UNLOCK", "RULE_CONFIRM", "RUN_APPROVAL", "SALARY_REVISION", "SETUP_SIGNOFF"]);
   });
 
-  it("Not set: Ready for first real run is red with one blocker per step, and the run cannot be asked for approval; nothing is written", async () => {
+  // FIX-H4 (independent audit 2026-11-20): changed tests (three). Not set, or proposed and not confirmed, no longer blocks: every pay step is decided by two
+  // directors until BOTH choose otherwise. The rows are ready (green) and say so; the run's approval waits for the other director.
+  it("Not set: Ready for first real run is green for each step (two directors decide, the default), and nothing blocks asking for the other director's approval", async () => {
     await clear();
     const report = await buildSetupReport();
     const rows = report.sections.flatMap((s) => s.items).filter((i) => i.id.startsWith("safety:director-choice:"));
     expect(rows.map((r) => r.id.split(":")[2]).sort()).toEqual([...DIRECTOR_CHOICE_REQUIRED_STEPS].sort());
-    for (const r of rows) expect([r.id, r.status, r.required]).toEqual([r.id, "NOT_SET", true]);
+    for (const r of rows) expect([r.id, r.status, r.detail]).toEqual([r.id, "CONFIRMED", expect.stringMatching(/two directors decide \(the default\)/)]);
     const ready = readinessOf(report);
-    expect(ready.ready).toBe(false);
-    for (const s of DIRECTOR_CHOICE_REQUIRED_STEPS) expect(ready.blockers.map((b) => b.itemId), s).toContain(`safety:director-choice:${s}`);
-    const { preview, request } = await ask();
+    for (const s of DIRECTOR_CHOICE_REQUIRED_STEPS) expect(ready.blockers.map((b) => b.itemId), s).not.toContain(`safety:director-choice:${s}`);
+    const preview = await step(world.tokens.maker, runId, "run", "preview");
     expect(preview.status).toBe(200);
-    expect(preview.body.blockers.map((b: { code: string }) => b.code)).toContain("DIRECTOR_CHOICE_NOT_SET");
-    expect(preview.body.blockers.find((b: { code: string }) => b.code === "DIRECTOR_CHOICE_NOT_SET").message).toContain("(System Settings, the Director authority tab)"); // cleanup C2
-    expect([request.status, request.body.error?.code]).toEqual([409, "DIRECTOR_CHOICE_NOT_SET"]);
-    expect((await runRow(runId)).status).toBe("CALCULATED");
-    expect(await prisma.payrollApproval.count({ where: { subjectId: runId } })).toBe(0);
+    expect(preview.body.blockers.map((b: { code: string }) => b.code)).not.toContain("DIRECTOR_CHOICE_NOT_SET");
+    const { authorityFor } = await import("../../../lib/directorAuthority");
+    expect(await authorityFor("RUN_APPROVAL")).toBe("SECOND_DIRECTOR"); // the request (exercised in the tests below) waits for the other director
   });
 
-  it("proposed but not confirmed is still not set: the row waits, the run still refuses", async () => {
+  it("proposed but not confirmed is not in force: the row says it waits, and two directors still decide", async () => {
     const at = new Date().toISOString(); // allow-clock: a fixture
     const steps = Object.fromEntries(DIRECTOR_CHOICE_REQUIRED_STEPS.map((s) => [s, { pending: { mode: "DIRECTOR_AUTHORITY", proposedBy: "test-proposer", proposedAt: at } }]));
     await prisma.systemSetting.upsert({ where: { key: "payroll.secondDirector" }, create: { key: "payroll.secondDirector", value: { v: 2, steps } }, update: { value: { v: 2, steps } } });
     const rows = (await buildSetupReport()).sections.flatMap((s) => s.items).filter((i) => i.id.startsWith("safety:director-choice:"));
-    for (const r of rows) expect([r.status, r.detail], r.id).toEqual(["PLACEHOLDER", expect.stringMatching(/other director has not confirmed/)]);
-    expect((await ask()).request.body.error?.code).toBe("DIRECTOR_CHOICE_NOT_SET");
+    for (const r of rows) expect([r.status, r.detail], r.id).toEqual(["CONFIRMED", expect.stringMatching(/waits for the other director/)]);
+    const { authorityFor } = await import("../../../lib/directorAuthority");
+    for (const s of DIRECTOR_CHOICE_REQUIRED_STEPS) expect(await authorityFor(s)).toBe("SECOND_DIRECTOR");
   });
 
-  it("one step left Not set is enough to keep payroll from running", async () => {
+  it("a step both directors set to 'decides alone' is a red row while it is on; the others are two-director", async () => {
     const all = Object.fromEntries(DIRECTOR_CHOICE_REQUIRED_STEPS.map((s) => [s, "DIRECTOR_AUTHORITY" as const]));
     delete (all as Record<string, unknown>).BANK_FILE;
     await setDirectorChoices(all);
-    expect(readinessOf(await buildSetupReport()).blockers.map((b) => b.itemId)).toContain("safety:director-choice:BANK_FILE");
-    expect((await ask()).request.body.error?.code).toBe("DIRECTOR_CHOICE_NOT_SET"); // the run-level blocker names every unset step
+    const ready = readinessOf(await buildSetupReport());
+    expect(ready.blockers.map((b) => b.itemId)).not.toContain("safety:director-choice:BANK_FILE");
+    expect(ready.dangers.map((d) => d.itemId)).toContain("safety:director-choice:RUN_APPROVAL");
+    expect(ready.dangers.map((d) => d.itemId)).not.toContain("safety:director-choice:BANK_FILE");
   });
 
   it("a different director: the act waits for the other, who is told it is waiting (counts only); the preparer cannot decide it", async () => {

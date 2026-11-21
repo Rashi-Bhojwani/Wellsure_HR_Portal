@@ -317,7 +317,7 @@ export async function apply(id: string, raw: unknown, actor: Actor): Promise<{ w
   if (a.invalid > 0 && !input.skipInvalid) throw new HttpError(409, `${a.invalid} ${a.invalid === 1 ? "row is" : "rows are"} invalid, so nothing was saved. Fix the file, or choose to skip the invalid rows.`, "FILE_HAS_INVALID_ROWS");
   const good = a.rows.filter((r) => r.problems.length === 0);
   if (good.length === 0) throw new HttpError(409, "No row is valid, so there is nothing to save.", "NOTHING_TO_SAVE");
-  await assertNotOwnPay(actor.userId, good.flatMap((r) => (r.employeeId ? [r.employeeId] : [])), "This import");
+  await assertNotOwnPay(actor.userId, good.flatMap((r) => (r.employeeId ? [r.employeeId] : [])), "This import", { proposal: true });
 
   const planned = good.flatMap((r) => r.months.flatMap((month) => Object.entries(r.figures).map(([head, amount]) => ({ employeeId: r.employeeId!, head, amount, month }))));
   const months = [...new Set(planned.map((p) => p.month))].sort();

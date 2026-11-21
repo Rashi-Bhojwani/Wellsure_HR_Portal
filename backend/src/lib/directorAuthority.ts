@@ -107,13 +107,20 @@ export async function requiresSecondDirector(step: DirectorStep, db: Db = prisma
  * The authority an act of this step is made under, read now. Call it inside the transaction that records the act. A payroll step whose choice is not Confirmed REFUSES:
  * payroll does not run on a default nobody chose. (Settings and a director's own identity entry are not payroll steps: unset, the director acts and the other is told.)
  */
+// FIX-H4 (independent audit 2026-11-20): every pay step is two-director by default. A payroll step with no confirmed choice is decided by a different director
+// (SECOND_DIRECTOR); "the acting director decides alone" applies only once BOTH directors have chosen it (one proposes, the other confirms), never to a director's
+// own pay (approvals.ts authorise), and shows as a red row on Ready for First Run and on the audit screen while it is on.
 export async function authorityFor(step: DirectorStep, db: Db = prisma): Promise<ApprovalAuthority> {
   const mode = await choiceMode(step, db);
   if (mode) return mode;
-  if (isChoiceRequired(step)) {
-    throw new HttpError(409, `The two directors have not both chosen how “${DIRECTOR_STEP_INFO[step].label}” is decided (a different director, or the acting director alone). Payroll will not run this until one director has set it and the other has confirmed it (System Settings, the Director authority tab).`, "DIRECTOR_CHOICE_NOT_SET");
-  }
+  if (isChoiceRequired(step)) return "SECOND_DIRECTOR";
   return "DIRECTOR_AUTHORITY";
+}
+
+/** FIX-H4: the payroll steps where one director currently decides alone (both directors chose it), for the red rows. */
+export async function singleDirectorSteps(db: Db = prisma): Promise<Array<{ step: DirectorStep; label: string }>> {
+  const stored = await readStored(db);
+  return DIRECTOR_STEPS.filter((s) => isChoiceRequired(s) && stored.steps[s]?.current?.mode === "DIRECTOR_AUTHORITY").map((step) => ({ step, label: DIRECTOR_STEP_INFO[step].label }));
 }
 
 /** For screens that only DESCRIBE what would happen: an unset choice reads as the strictest (a different director), and the act itself refuses with the real reason. */

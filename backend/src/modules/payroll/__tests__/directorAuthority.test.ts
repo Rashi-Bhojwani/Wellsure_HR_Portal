@@ -94,27 +94,26 @@ describe("director authority", () => {
   };
 
   describe("the choices", () => {
-    it("start Not set: a payroll step refuses to run, while settings and a director's own entry still default to acting alone", async () => {
+    // FIX-H4 (independent audit 2026-11-20): changed test. Not set no longer refuses: every pay step is decided by two directors until both choose otherwise.
+    it("start Not set: a payroll step is decided by a second director (the default), while settings and a director's own entry still default to acting alone", async () => {
       await prisma.systemSetting.deleteMany({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY } });
       const list = await listSwitches(p.a.userId);
       expect(list.map((x) => x.step).sort()).toEqual([...DIRECTOR_STEPS].sort());
       for (const row of list) expect([row.step, row.status, row.mode], row.step).toEqual([row.step, "NOT_SET", null]);
       for (const step of ["BANK_FILE", "RUN_APPROVAL", "SALARY_REVISION", "RULE_CONFIRM", "SETUP_SIGNOFF", "PERIOD_UNLOCK", "PERIOD_FINALISE", "PAYSLIP_PUBLISH"] as const) {
-        await expect(authorityFor(step), step).rejects.toMatchObject({ status: 409, code: "DIRECTOR_CHOICE_NOT_SET" });
+        expect(await authorityFor(step), step).toBe("SECOND_DIRECTOR");
       }
-      // Cleanup C2: the message points to where the choice is made (System Settings, the Director authority tab), not "Admin Tools, Director authority".
-      await expect(authorityFor("BANK_FILE")).rejects.toMatchObject({ message: expect.stringContaining("(System Settings, the Director authority tab)") });
       expect(await authorityFor("SETTINGS")).toBe("DIRECTOR_AUTHORITY");
       expect(await authorityFor("IDENTITY_DIRECTOR_ENTRY")).toBe("DIRECTOR_AUTHORITY");
       const id = newId();
       figures.set(id, "1");
-      await expect(act(p.a, id)).rejects.toMatchObject({ code: "DIRECTOR_CHOICE_NOT_SET" });
+      await expect(act(p.a, id)).rejects.toMatchObject({ code: "SECOND_DIRECTOR_REQUIRED" });
       expect(await prisma.payrollApproval.count({ where: { subjectId: id } })).toBe(0);
     });
 
-    it("the old true/false form that nobody confirmed reads as Not set", async () => {
+    it("the old true/false form that nobody confirmed reads as Not set (two directors, the default)", async () => {
       await prisma.systemSetting.upsert({ where: { key: DIRECTOR_AUTHORITY_SETTING_KEY }, create: { key: DIRECTOR_AUTHORITY_SETTING_KEY, value: { BANK_FILE: false } }, update: { value: { BANK_FILE: false } } });
-      await expect(authorityFor("BANK_FILE")).rejects.toMatchObject({ code: "DIRECTOR_CHOICE_NOT_SET" });
+      expect(await authorityFor("BANK_FILE")).toBe("SECOND_DIRECTOR"); // FIX-H4: changed (was a refusal)
     });
 
     it("has words for every step, says what it covers, and recommends the second director for the four that matter most", () => {
@@ -127,7 +126,7 @@ describe("director authority", () => {
       expect(r.changed).toBe(true);
       noticeIds.push(r.noticeId!);
       expect((await listSwitches(p.a.userId)).find((x) => x.step === "PERIOD_UNLOCK")).toMatchObject({ status: "PENDING_CONFIRMATION", mode: null, proposed: { mode: "SECOND_DIRECTOR", byMe: true } });
-      await expect(authorityFor("PERIOD_UNLOCK")).rejects.toMatchObject({ code: "DIRECTOR_CHOICE_NOT_SET" }); // proposed is not in force
+      expect(await authorityFor("PERIOD_UNLOCK")).toBe("SECOND_DIRECTOR"); // proposed is not in force (FIX-H4: the default, two directors)
       // The proposer cannot confirm their own proposal.
       await expect(confirmChoice("PERIOD_UNLOCK", "SECOND_DIRECTOR", { userId: p.a.userId })).rejects.toMatchObject({ status: 403, code: "CHOICE_CONFIRMER_IS_PROPOSER" });
       // A confirmation is bound to what the confirmer was shown.
@@ -273,12 +272,14 @@ describe("director authority", () => {
       expect((await prisma.payrollApproval.findFirstOrThrow({ where: { subjectId: id } })).status).toBe("VOIDED");
     });
 
-    it("lets a director act on their own pay on their own authority, tagged as a self-change, and the other director is told twice over (the act, and the self-change)", async () => {
+    // FIX-H4/T1 (independent audit 2026-11-20): changed test. Deciding alone never covers one's own pay: the act becomes a proposal (PENDING, SECOND_DIRECTOR) that
+    // the other director decides; it is still tagged as a self-change and the other director is told of it.
+    it("a director acting alone on their own pay only PROPOSES it: the other director decides; tagged as a self-change, and the other director is told", async () => {
       const id = newId();
       figures.set(id, "5");
       affected.add(p.a.userId);
       const ok = await act(p.a, id);
-      expect(ok.authority).toBe("DIRECTOR_AUTHORITY");
+      expect([ok.status, ok.authority]).toEqual(["PENDING", "SECOND_DIRECTOR"]);
       const note = await prisma.directorActionNotice.findFirstOrThrow({ where: { approvalId: ok.id }, include: { receipts: true } });
       noticeIds.push(note.id);
       expect(note.receipts.map((r) => r.recipientUserId)).toContain(p.b.userId); // the other director is told of the act

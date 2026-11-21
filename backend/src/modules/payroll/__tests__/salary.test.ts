@@ -301,7 +301,8 @@ describe("a salary revision, from preparing to applying", () => {
   });
 });
 
-describe("a director may change their own pay; it is recorded, tagged, and the other director is told", () => {
+// FIX-H4/T1 (independent audit 2026-11-20): a director may PROPOSE their own pay (a revision); the other director decides. Recorded, tagged, told.
+describe("a director may propose a change to their own pay; it is recorded, tagged, and the other director is told", () => {
   const selfNotices = (actorUserId: string) => prisma.directorActionNotice.findMany({ where: { actorUserId, subjectType: "SELF_PAY_CHANGE" }, include: { receipts: true } });
   const selfAudit = (actorUserId: string) => prisma.auditLog.findMany({ where: { actorUserId, action: "payroll.self_pay_change" } });
 
@@ -330,13 +331,16 @@ describe("a director may change their own pay; it is recorded, tagged, and the o
     expect(Object.keys(n.detail as object).sort()).toEqual(["tag", "what"]); // nothing but the tag and the kind of act: no amount, no person
   });
 
-  it("a Super Admin whose own pay is in an adjustment may add it; it is recorded the same way", async () => {
+  // FIX-H4/T1 (independent audit 2026-11-20): changed test. It locked in "a Super Admin may add an adjustment to their own pay". An adjustment is a one-person act,
+  // so a director's own is refused now: the other director adds it (a director is never the only one to decide their own pay).
+  it("a Super Admin whose own pay is in an adjustment cannot add it alone; the other director does", async () => {
     const boss = await createFullTestEmployee(w.org, { roleCode: "SUPER_ADMIN" });
     try {
       const token = await loginAs(boss.employeeCode);
       const adj = await api(token).post("/adjustments/preview", { input: { employeeId: boss.employeeId, componentCode: w.basic, direction: "EARNING", amount: "100", reason: "bonus" } });
-      expect(adj.status, JSON.stringify(adj.body)).toBe(200);
-      expect((await selfAudit(boss.userId)).length).toBeGreaterThan(0);
+      expect([adj.status, adj.body.error?.code]).toEqual([403, "SELF_PAY_OTHER_DIRECTOR"]);
+      const byOther = await maker().post("/adjustments/preview", { input: { employeeId: boss.employeeId, componentCode: w.basic, direction: "EARNING", amount: "100", reason: "bonus" } });
+      expect(byOther.status, JSON.stringify(byOther.body)).toBe(200);
     } finally {
       await cleanupPayrollRowsBy([boss.userId]);
       await cleanupFullTestEmployee(boss.employeeId);

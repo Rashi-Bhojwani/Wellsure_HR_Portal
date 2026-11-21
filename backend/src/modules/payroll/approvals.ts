@@ -273,8 +273,12 @@ export async function authorise(input: AuthoriseInput): Promise<PayrollApproval>
   if (!(await holds(input.actorUserId, adapter.makerPermission))) throw new HttpError(403, `Missing permission: ${adapter.makerPermission}`, "FORBIDDEN");
   await requireDirector(input.actorUserId, "act on director authority");
   await requireDirectorTwoFactor(input.actorUserId);
-  // A director acting on their own authority on a change to their own pay: allowed, and recorded as a self-change on top of the ordinary notice.
-  if (adapter.affectedUserIds && (await adapter.affectedUserIds(input.subjectId)).includes(input.actorUserId)) await recordSelfPayChange(input.actorUserId, "Acting on their own authority on a change to their own pay");
+  // FIX-H4/T1 (independent audit 2026-11-20): "one director decides alone" never applies to a change to that director's own pay. It becomes a proposal the OTHER
+  // director decides (an ordinary PENDING approval, SECOND_DIRECTOR), recorded as a self-change; the caller's carry-out step then waits for that decision.
+  if (adapter.affectedUserIds && (await adapter.affectedUserIds(input.subjectId)).includes(input.actorUserId)) {
+    await recordSelfPayChange(input.actorUserId, "Proposing a change to their own pay (the other director decides)");
+    return submit({ subject: input.subject, subjectId: input.subjectId, makerUserId: input.actorUserId, previewFingerprint: input.previewFingerprint, ...(input.note ? { note: input.note } : {}), ip: input.ip ?? null, notify: { step: input.step, subjectLabel: input.subjectLabel, itemCount: input.itemCount ?? null } });
+  }
   const contentHash = await adapter.hash(input.subjectId);
   let noticeId = "";
   let approval: PayrollApproval;

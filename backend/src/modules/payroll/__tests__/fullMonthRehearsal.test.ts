@@ -144,6 +144,9 @@ describe("Stage 9 — a full month, rehearsed end to end", () => {
     expect(before.status).toBeGreaterThanOrEqual(400); // no balance yet
     const grant = await api(world.supToken, "post", "/leave/grants", { employeeId: who("a"), leaveTypeId: pl.id, days: 5, entryDate: "2026-08-01", remarks: "Rehearsal opening balance (TEST)" });
     expect(grant.status, JSON.stringify(grant.body)).toBeLessThan(300);
+    // FIX-C3 (independent audit 2026-11-20): a grant is a proposal; a different director confirms it.
+    const confirmed = await api(world.tokens.checkerA, "post", `/leave/change-requests/${grant.body.id}/confirm`, {});
+    expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
     const applied = await ask();
     expect(applied.status, JSON.stringify(applied.body)).toBe(201);
     leaveId = applied.body.id ?? applied.body.request?.id;

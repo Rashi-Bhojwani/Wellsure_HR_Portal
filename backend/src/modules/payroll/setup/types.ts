@@ -29,6 +29,8 @@ export interface SetupItem {
   permissionNote?: string;
   /** A prominent, NON-blocking warning: it never makes Ready for first real run red. */
   warning?: string;
+  /** FIX-H4: a RED row that stays as long as the condition holds (one director deciding a pay step alone). Not a blocker: the directors chose it, both of them. */
+  danger?: string;
   /** Something that should be impossible but is true: a value confirmed by the person who entered it, a developer who can see a secret. */
   problem?: string;
   /** For people's data: how many are covered, and the first few who are not. */
@@ -76,6 +78,8 @@ export interface Readiness {
   blockers: Blocker[];
   /** Prominent, NON-blocking warnings (they never turn Ready red). */
   warnings: Array<{ itemId: string; title: string; warning: string; where: { label: string; path: string } }>;
+  /** FIX-H4: red rows (one director deciding a pay step alone), shown for as long as they hold. */
+  dangers: Array<{ itemId: string; title: string; danger: string; where: { label: string; path: string } }>;
   /** Shown, not blocking. */
   notRequiredYet: Array<{ itemId: string; title: string; status: SetupStatus; reason: string }>;
   /** D-37: the behaviour settings (three with a common default, labelled "Default, change in settings"), informational only. */

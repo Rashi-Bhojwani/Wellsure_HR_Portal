@@ -113,10 +113,14 @@ export async function listAuditLogs(query: ListAuditLogQuery, viewer: AuditViewe
   });
   const actorById = new Map(actorRows.map((a) => [a.id, a.employee]));
 
+  // FIX-H4 (independent audit 2026-11-20): the audit screen shows a red row for as long as one director decides a pay step alone (step names only).
+  const { singleDirectorSteps } = await import("../../lib/directorAuthority");
+  const singleDirector = (await singleDirectorSteps()).map((s) => s.label);
   return {
     total,
     page: query.page,
     pageSize: query.pageSize,
+    singleDirectorSteps: singleDirector,
     valuesHidden: !!viewer.valuesHidden,
     rows: rows.map((r) => viewer.valuesHidden ? ({
       id: r.id,

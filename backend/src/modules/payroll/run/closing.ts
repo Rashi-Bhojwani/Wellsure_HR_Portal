@@ -243,10 +243,10 @@ async function envelope(slug: Slug, run: PayrollRun, actor: Actor, blockers: Blo
 }
 
 /** Payroll does not run while the two directors have not both chosen, for every step that can commit money or change pay rules, who decides it. */
-async function choiceBlockers(action: string): Promise<Blocker[]> {
-  const unset = await unsetRequiredSteps();
-  if (unset.length === 0) return [];
-  return [{ code: "DIRECTOR_CHOICE_NOT_SET", title: "Who decides each step is not set", message: `The two directors have not both chosen, and confirmed, who decides: ${unset.map((u) => u.label).join("; ")}. One sets it, the other confirms it (System Settings, the Director authority tab). Until then the run cannot be ${action}.` }];
+// FIX-H4 (independent audit 2026-11-20): a step with no confirmed choice is decided by two directors (the default), so it no longer blocks the run.
+async function choiceBlockers(_action: string): Promise<Blocker[]> {
+  void unsetRequiredSteps;
+  return [];
 }
 
 async function realBlocker(run: PayrollRun, action: string): Promise<Blocker[]> {

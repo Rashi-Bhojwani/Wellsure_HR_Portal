@@ -4,7 +4,7 @@ import { CONTINUING, PACK_CHECKED_ON, PACK_RULES, STANDARD_DEFAULT_LABEL, entryO
 import { DEVELOPER_ROLE_CODE, SENSITIVE_PERMISSION_KEYS } from "@shared/constants/sensitiveData";
 import { env } from "../../../config/env";
 import { businessToday } from "../../../lib/businessDate";
-import { activeDirectors, choiceFacts, directorTwoFactorRequired } from "../../../lib/directorAuthority";
+import { activeDirectors, choiceFacts, directorTwoFactorRequired, singleDirectorSteps } from "../../../lib/directorAuthority";
 import { salariesOn } from "../../../lib/effectiveDating";
 import { activeUsersHoldingPermission, resolveAccess } from "../../../lib/permissions";
 import { prisma } from "../../../lib/prisma";
@@ -208,13 +208,16 @@ async function safetyItems(_demo: boolean): Promise<SetupItem[]> {
   // The choice for each payroll step, with no default: "a different director must decide" or "the acting director decides alone, the other is told". One director sets it, the other
   // confirms it. Until both have, payroll refuses to run that step, so each Not set (or waiting) is a blocker.
   const choiceNames = await namesOfUsers((await choiceFacts()).flatMap((c) => (c.confirmedBy ? [c.confirmedBy] : [])));
+  const singleSteps = await singleDirectorSteps();
   for (const c of await choiceFacts()) {
     const label = `${c.label}: who decides`;
     const base = { id: `safety:director-choice:${c.step}`, section: "safety" as const, title: c.demo ? `${label} (DEMO choice)` : label, why: "The two directors choose, with no default, whether a different director must decide this step or the acting director decides alone (the other is told either way). One sets it; the other confirms it. Payroll will not run this step until both have.", required: true, enteredBy: null, where: { label: "Admin Tools, System Settings, Director authority", path: "/admin/admin-tools/settings?section=director" } };
+    // FIX-H4 (independent audit 2026-11-20): not chosen = two directors decide (the default), which is ready. One director deciding alone (both chose it) is a red row.
+    const alone = c.status === "CONFIRMED" && singleSteps.some((x) => x.step === c.step);
     out.push(
       c.status === "CONFIRMED"
-        ? { ...base, status: "CONFIRMED", confirmedBy: c.confirmedBy ? { name: choiceNames.get(c.confirmedBy) ?? "A director", at: c.confirmedAt ?? "" } : null, detail: c.demo ? "A made-up choice, for the DEMO company only." : "Chosen by one director and confirmed by the other." }
-        : { ...base, status: c.status === "PENDING_CONFIRMATION" ? "PLACEHOLDER" : "NOT_SET", confirmedBy: null, detail: c.status === "PENDING_CONFIRMATION" ? "Proposed. The other director has not confirmed it yet." : "Not set. Neither director has chosen yet." },
+        ? { ...base, status: "CONFIRMED", confirmedBy: c.confirmedBy ? { name: choiceNames.get(c.confirmedBy) ?? "A director", at: c.confirmedAt ?? "" } : null, detail: c.demo ? "A made-up choice, for the DEMO company only." : alone ? "One director decides alone (both directors chose this). Never for a director's own pay, leave, bank or role." : "Chosen by one director and confirmed by the other: a different director decides.", ...(alone ? { danger: "One director decides this pay step alone. Both directors switched it on; it stays red for as long as it is on." } : {}) }
+        : { ...base, status: "CONFIRMED", confirmedBy: null, detail: c.status === "PENDING_CONFIRMATION" ? "A change is proposed and waits for the other director. Until then two directors decide (the default)." : "Not chosen: two directors decide (the default)." },
     );
   }
 
@@ -438,6 +441,7 @@ export function readinessOf(report: SetupReport): Readiness {
   let confirmed = 0;
   const notRequiredYet: Readiness["notRequiredYet"] = [];
   const warnings: Readiness["warnings"] = [];
+  const dangers: Readiness["dangers"] = [];
   const behaviours: Readiness["behaviours"] = [];
   for (const section of report.sections) {
     for (const item of section.items) {
@@ -446,6 +450,7 @@ export function readinessOf(report: SetupReport): Readiness {
         continue;
       }
       if (item.warning) warnings.push({ itemId: item.id, title: item.title, warning: item.warning, where: item.where });
+      if (item.danger) dangers.push({ itemId: item.id, title: item.title, danger: item.danger, where: item.where });
       if (!item.required) {
         if (item.status !== "CONFIRMED") notRequiredYet.push({ itemId: item.id, title: item.title, status: item.status, reason: item.notRequiredReason ?? "Not needed for the first run." });
         continue;
@@ -466,5 +471,5 @@ export function readinessOf(report: SetupReport): Readiness {
       });
     }
   }
-  return { ready: blockers.length === 0, demo: report.demo, generatedAt: report.generatedAt, required, confirmed, blockers, warnings, notRequiredYet, behaviours };
+  return { ready: blockers.length === 0, demo: report.demo, generatedAt: report.generatedAt, required, confirmed, blockers, warnings, dangers, notRequiredYet, behaviours };
 }

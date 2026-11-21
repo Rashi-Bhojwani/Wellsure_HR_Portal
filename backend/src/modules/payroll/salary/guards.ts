@@ -5,7 +5,8 @@ import { recordDirectorNotice, scheduleDelivery } from "../../../lib/directorNot
 import { prisma } from "../../../lib/prisma";
 import { HttpError } from "../../../middleware/errorHandler";
 
-// Owner decision (Stage 3 review): a DIRECTOR may set their own pay. It is never silent: each such act is audited, tagged as a self-change, and announced to the other
+// Superseded 2026-11-20 (independent audit, H4/T1): a director may PROPOSE a change to their own pay; the OTHER director confirms it (see assertNotOwnPay).
+// Earlier owner decision (Stage 3 review): a DIRECTOR may set their own pay. It is never silent: each such act is audited, tagged as a self-change, and announced to the other
 // director (counts only: the notice names no figure and no person) with the same red banner after three days unacknowledged as any other director act. Anybody who is
 // not a director still cannot change their own pay, whatever else they hold.
 
@@ -36,13 +37,19 @@ export async function recordSelfPayChange(actorUserId: string, what: string): Pr
 }
 
 /**
- * Refuses when `employeeIds` includes the actor's own employee record, unless the actor is a director, whose act is allowed and recorded (recordSelfPayChange).
+ * FIX-H4/T1 (independent audit 2026-11-20): a director is never the only approver of a change to their own pay. Refuses when `employeeIds` includes the actor's own
+ * record, except a director's PROPOSAL (`proposal: true`: a revision, a month's inputs, carrying out a revision the other director approved), which is allowed and
+ * recorded (recordSelfPayChange) because the other director decides it. A one-person act on one's own pay (a hold, an adjustment, an override, an exclusion, a
+ * correction) is refused for a director too: the other director does it.
  */
-export async function assertNotOwnPay(actorUserId: string, employeeIds: readonly string[], what: string): Promise<void> {
+export async function assertNotOwnPay(actorUserId: string, employeeIds: readonly string[], what: string, opts: { proposal?: boolean } = {}): Promise<void> {
   const own = await employeeIdOfUser(actorUserId);
   if (!own || !employeeIds.includes(own)) return;
   if (!(await isDirector(actorUserId))) {
     throw new HttpError(403, `${what} would change your own pay. Only a director may do that; somebody else has to do it for you.`, "SELF_PAY");
+  }
+  if (!opts.proposal) {
+    throw new HttpError(403, `${what} would change your own pay. The other director does this for you: a director is never the only one to decide their own pay.`, "SELF_PAY_OTHER_DIRECTOR");
   }
   await recordSelfPayChange(actorUserId, what);
 }

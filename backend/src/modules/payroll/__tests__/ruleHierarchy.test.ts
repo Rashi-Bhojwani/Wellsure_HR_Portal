@@ -150,7 +150,9 @@ describe("overrides, end to end", () => {
     expect((await request(app).get("/api/payroll/rule-overrides").set(...authHeader(w.tokens.outsider))).status).toBe(403);
   });
 
-  it("a director may make an override for themselves: it is recorded as a self-change and the other director is told", async () => {
+  // FIX-H4/T1 (independent audit 2026-11-20): changed wording only. Making (proposing) an override of one's own pay is still allowed and recorded; confirming it is
+  // the other director's (rules/overrides.ts confirmOverride refuses the payee).
+  it("a director may PROPOSE an override for themselves: it is recorded as a self-change and the other director is told", async () => {
     const own = await preview({ targetId: w.maker.employeeId, ruleKey: "PF_ADMIN_RATE", value: "0.4" });
     expect(own.status, JSON.stringify(own.body)).toBe(200);
     expect(await prisma.auditLog.count({ where: { actorUserId: w.maker.userId, action: "payroll.self_pay_change" } })).toBeGreaterThan(0);

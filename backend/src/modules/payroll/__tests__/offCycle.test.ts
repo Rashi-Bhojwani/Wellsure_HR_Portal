@@ -146,7 +146,7 @@ describe("P7-6b — off-cycle runs over the routes", () => {
   });
 
   let offId = "";
-  it("held pay: the candidate is listed, prepared for its exact net, never in the past, never for oneself; an unchosen run-approval step refuses", async () => {
+  it("held pay: the candidate is listed, prepared for its exact net, never in the past, never for oneself; an unchosen run-approval step is two-director", async () => {
     seam.ready = true;
     const cands = (await oc(world.tokens.maker, "get", "/candidates")).body.candidates as Array<{ kind: string; sourceRef: string; amount: string }>;
     expect(cands.find((c) => c.sourceRef === heldItemId)).toMatchObject({ kind: "HELD_PAY" });
@@ -159,9 +159,10 @@ describe("P7-6b — off-cycle runs over the routes", () => {
     expect(paise(made.body.net)).toBe(paise(heldNet));
     expect(made.body.state).toBe("PREPARED");
     await expect(prisma.offCycleRun.update({ where: { id: offId }, data: { net: "1" } })).rejects.toThrow(/OFF_CYCLE_IMMUTABLE/);
-    // An unchosen step refuses (the owners' choice has no default).
+    // FIX-H4 (independent audit 2026-11-20): changed test. An unchosen step no longer refuses: it is decided by a second director (the default).
     await setDirectorChoices({});
-    expect((await oc(world.tokens.maker, "post", `/${offId}/approval`, { fingerprint: made.body.fingerprint })).body.error.code).toBe("DIRECTOR_CHOICE_NOT_SET");
+    const { authorityFor } = await import("../../../lib/directorAuthority");
+    expect(await authorityFor("RUN_APPROVAL")).toBe("SECOND_DIRECTOR");
     await setDirectorChoices({ RUN_APPROVAL: "SECOND_DIRECTOR", BANK_FILE: "SECOND_DIRECTOR" });
   });
 

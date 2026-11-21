@@ -162,7 +162,7 @@ async function validate(raw: OverrideInput, actorUserId: string): Promise<{ key:
     if (!(await prisma.department.findUnique({ where: { id: raw.targetId }, select: { id: true } }))) throw new HttpError(404, "That department was not found.", "NOT_FOUND");
   } else {
     if (!(await prisma.employee.findUnique({ where: { id: raw.targetId }, select: { id: true } }))) throw new HttpError(404, "That employee was not found.", "NOT_FOUND");
-    await assertNotOwnPay(actorUserId, [raw.targetId], "This override");
+    await assertNotOwnPay(actorUserId, [raw.targetId], "This override", { proposal: true }); // FIX-H4: saved as a Placeholder; a different director confirms it
   }
   const registrationRef = raw.registrationRef?.trim() ? raw.registrationRef.trim().slice(0, 64) : null;
   const key = overrideKey(raw.ruleKey, raw.level, raw.targetId, raw.effectiveFrom);
@@ -244,6 +244,11 @@ export async function confirmOverride(key: string, input: { version: number; typ
   const data = await loadItems(KIND, [key]);
   if (data.versions.length === 0) throw new HttpError(404, "There is no such override.", "NOT_FOUND");
   const summary = summarise(data, key);
+  // FIX-H4/T1 (independent audit 2026-11-20): a director never confirms an override of their own pay, even where they may confirm what they wrote.
+  const [, level, targetId] = key.split(SEP);
+  if (level === "EMPLOYEE" && targetId && (await prisma.user.count({ where: { id: actor.userId, employeeId: targetId } })) > 0) {
+    throw new HttpError(403, "This override is of your own pay, so the other director confirms it.", "SELF_PAY_OTHER_DIRECTOR");
+  }
   await confirmVersion(
     "RULE_CONFIRM",
     KIND,

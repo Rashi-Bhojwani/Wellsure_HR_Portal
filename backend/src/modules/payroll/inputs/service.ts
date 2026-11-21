@@ -300,7 +300,7 @@ export async function enter(raw: unknown, actor: Actor): Promise<{ written: numb
     }
   });
   if (problems.length > 0) throw new HttpError(400, "Nothing was saved: " + problems.slice(0, 5).join(" "), "VALIDATION_ERROR", { problems });
-  await assertNotOwnPay(actor.userId, [...new Set(rows.map((r) => r.employeeId))], "These entries");
+  await assertNotOwnPay(actor.userId, [...new Set(rows.map((r) => r.employeeId))], "These entries", { proposal: true });
   return writeEntries(input.cycleStart, rows, input.reason, actor, { what: "Monthly Inputs were entered" });
 }
 
@@ -325,7 +325,7 @@ export async function fillBlanks(raw: unknown, actor: Actor): Promise<{ written:
   const heads = chosen.filter(headReady).map((h) => h.code); // heads with a choice Not set are left blank, and the run names them
   const blanks = missingInputs(who.ids, heads, currentCells(await ledger(input.cycleStart)));
   if (blanks.length === 0) return { written: 0, voidedConfirmation: false };
-  await assertNotOwnPay(actor.userId, [...new Set(blanks.map((b) => b.employeeId))], "These entries");
+  await assertNotOwnPay(actor.userId, [...new Set(blanks.map((b) => b.employeeId))], "These entries", { proposal: true });
   return writeEntries(input.cycleStart, blanks.map((b) => ({ employeeId: b.employeeId, head: b.head, amount: "0" })), input.reason, actor, { what: "Blank Monthly Inputs were entered as 0" });
 }
 
