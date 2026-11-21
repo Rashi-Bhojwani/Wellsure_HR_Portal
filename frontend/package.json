@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "check:bundle": "node scripts/check-bundle.mjs",
     "check:popovers": "node e2e/popovers.mjs",
+    "check:keyboard-leave": "node e2e/keyboard-leave-apply.mjs",
     "check:sensitive-ui": "node e2e/sensitive-ui.mjs",
     "check:tokens": "node scripts/check-design-tokens.mjs",
     "dev": "vite",

@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, DatePicker, Form, Input, Select } from "antd";
+import { Button, Form, Input, Select } from "antd";
+import { DateRangeFields } from "../../../components/leave/DateRangeFields";
 import type { Dayjs } from "dayjs";
 import { apiErrorMessage as errorMessage } from "../../../lib/apiError";
 import * as leaveApi from "../../../api/leave";
@@ -13,7 +14,6 @@ import { EmployeeAvatar } from "../../../components/common/EmployeeAvatar";
 // PEEPS-END
 // PEEPS-END
 
-const { RangePicker } = DatePicker;
 
 const DAY_PART_OPTIONS = [
   { value: "FULL", label: "Full Day" },
@@ -91,8 +91,8 @@ export function LeaveApplyPage() {
               />
             )}
 
-            <Form.Item name="dateRange" label="Dates" rules={[{ required: true, message: "Select the leave dates" }]}>
-              <RangePicker style={{ width: "100%" }} placeholder={["From", "To"]} format="DD MMM YYYY" />
+            <Form.Item name="dateRange" label="Dates" rules={[{ required: true, message: "Select the leave dates" }, { validator: (_r, v?: [Dayjs | null, Dayjs | null]) => (v?.[0] && v?.[1] ? Promise.resolve() : Promise.reject(new Error("Select both the From and To dates"))) }]}>
+              <DateRangeFields />
             </Form.Item>
 
             <div style={{ display: selectedType?.allowHalfDay ? "flex" : "none", gap: space[4], flexWrap: phone ? "wrap" : "nowrap" }}>
