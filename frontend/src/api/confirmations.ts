@@ -3,7 +3,7 @@ import { apiClient } from "./client";
 // FIX (independent audit 2026-11-20): the two-director confirmations the audit fixes add, in one place. Values are never sent: only which fields would change,
 // who it is about (employee number) and what kind of change it is.
 export interface LeaveChangeRow { id: string; kind: "GRANT" | "COMP_OFF_GRANT" | "IMPORT"; status: "PENDING" | "CONFIRMED" | "REJECTED"; summary: string; proposedAt: string; mine: boolean; aboutMe: boolean; canConfirm: boolean; canReject: boolean }
-export interface DirectorChangeRow { id: string; action: "GRANT_SUPER_ADMIN" | "REVOKE_SUPER_ADMIN" | "ASSIGN_ROLE" | "REMOVE_ROLE" | "SUSPEND"; status: "PENDING" | "APPLIED" | "REJECTED"; target: string; roleCode: string | null; reason: string; proposedAt: string; mine: boolean; confirmations: number; canConfirm: boolean; canReject: boolean }
+export interface DirectorChangeRow { id: string; action: "GRANT_SUPER_ADMIN" | "REVOKE_SUPER_ADMIN" | "ASSIGN_ROLE" | "REMOVE_ROLE" | "SUSPEND" | "RESET_2FA" | "UNLOCK"; status: "PENDING" | "APPLIED" | "REJECTED"; target: string; roleCode: string | null; reason: string; proposedAt: string; mine: boolean; confirmations: number; canConfirm: boolean; canReject: boolean }
 export interface ContactChangeRow { id: string; kind: "LOGIN_EMAIL" | "DIRECTOR_RECORD"; status: "PENDING" | "APPLIED" | "REJECTED"; employeeCode: string; fields: string[]; source: string; proposedAt: string; mine: boolean; aboutMe: boolean; canConfirm: boolean; canReject: boolean }
 export interface LoginBlock { ip: string; failures: number; secondsLeft: number }
 
@@ -28,6 +28,8 @@ export const DIRECTOR_ACTION_LABEL: Record<DirectorChangeRow["action"], string> 
   ASSIGN_ROLE: "Give a director a role",
   REMOVE_ROLE: "Take a role from a director",
   SUSPEND: "Turn off a director's portal access",
+  RESET_2FA: "Reset a director's two-step sign-in",
+  UNLOCK: "Unlock a director's sign-in",
 };
 export const LEAVE_KIND_LABEL: Record<LeaveChangeRow["kind"], string> = { GRANT: "Grant or debit", COMP_OFF_GRANT: "Comp-off credit", IMPORT: "Leave import" };
 export const CONTACT_KIND_LABEL: Record<ContactChangeRow["kind"], string> = { LOGIN_EMAIL: "Sign-in email", DIRECTOR_RECORD: "Director's own details" };
