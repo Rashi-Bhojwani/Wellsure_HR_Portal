@@ -72,6 +72,19 @@ type UpdateInput = z.infer<typeof updateSettingsSchema>;
 // reads as "who changed the login rate limit," not one opaque blob.
 export async function updateSettings(input: UpdateInput, meta: { actorUserId: string; ipAddress?: string | null; userAgent?: string | null }): Promise<SecuritySettings> {
   const before = await getSettings();
+  // FIX-C1/H2 (independent audit 2026-11-20): these two moved to Default behaviours (one director proposes, the other confirms). Checked before anything is
+  // written, and refused only when the value actually changes: the System Settings form sends every field, and resending the current value is not a change
+  // (2026-11-21: refusing any payload that carried the sign-in limit made the whole Security section unsavable, and a refused save was half-applied).
+  if (input.requireDirectorTwoFactor !== undefined && input.requireDirectorTwoFactor !== before.requireDirectorTwoFactor) {
+    // FIX-C1 (independent audit 2026-11-20): compulsory by default, and changed only by one director proposing and the other confirming (Default behaviours,
+    // "Two-step sign-in is compulsory for the directors"). This one-director path no longer changes it.
+    if (!(await isDirector(meta.actorUserId))) throw new HttpError(403, "Only a director can change whether two-step sign-in is required of directors.", "DIRECTOR_ONLY");
+    throw new HttpError(409, "Two-step sign-in for directors is changed in Default behaviours: one director proposes, the other confirms.", "USE_DEFAULT_BEHAVIOURS");
+  }
+  const loginLimit = input.rateLimits?.login;
+  if (loginLimit && (loginLimit.maxAttempts !== before.rateLimits.login.maxAttempts || loginLimit.windowSeconds !== before.rateLimits.login.windowSeconds)) {
+    throw new HttpError(409, "The sign-in limit per address is changed in Default behaviours: one director proposes, the other confirms.", "USE_DEFAULT_BEHAVIOURS");
+  }
 
   if (input.lockoutMaxAttempts !== undefined || input.lockoutMinutes !== undefined) {
     const next = {
@@ -89,17 +102,9 @@ export async function updateSettings(input: UpdateInput, meta: { actorUserId: st
   if (input.require2faRoles !== undefined) {
     await setSetting("auth.require2faRoles", input.require2faRoles, meta.actorUserId);
   }
-  if (input.requireDirectorTwoFactor !== undefined && input.requireDirectorTwoFactor !== before.requireDirectorTwoFactor) {
-    // FIX-C1 (independent audit 2026-11-20): compulsory by default, and changed only by one director proposing and the other confirming (Default behaviours,
-    // "Two-step sign-in is compulsory for the directors"). This one-director path no longer changes it.
-    if (!(await isDirector(meta.actorUserId))) throw new HttpError(403, "Only a director can change whether two-step sign-in is required of directors.", "DIRECTOR_ONLY");
-    throw new HttpError(409, "Two-step sign-in for directors is changed in Default behaviours: one director proposes, the other confirms.", "USE_DEFAULT_BEHAVIOURS");
-  }
-  if (input.rateLimits?.login) {
-    throw new HttpError(409, "The sign-in limit per address is changed in Default behaviours: one director proposes, the other confirms.", "USE_DEFAULT_BEHAVIOURS");
-  }
   if (input.rateLimits) {
     for (const key of RATE_LIMIT_KEYS) {
+      if (key === "login") continue; // the Default behaviour auth.loginIpFailureLimit (checked above), never the old setting
       const value = input.rateLimits[key];
       if (value) await setSetting(RATE_LIMIT_SETTING_KEY[key], value, meta.actorUserId);
     }

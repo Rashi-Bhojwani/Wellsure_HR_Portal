@@ -89,7 +89,7 @@ for (const [role, { code, seesPay }] of Object.entries(ROLES)) {
       const landed = new URL(page.url()).pathname;
       const heading = ((await page.locator("h1, h2, h3").first().textContent({ timeout: 2000 }).catch(() => "")) ?? "").trim().slice(0, 80);
       const text = await page.locator("main, body").first().innerText().catch(() => "");
-      const refused = /not available to you|don't have (access|permission)|You do not have|isn't something you can|Only a director|forbidden|no access/i.test(text);
+      const refused = /not switched on for you|not available to you|don't have (access|permission)|You do not have|isn't something you can|Only a director|forbidden|no access/i.test(text);
       const figure = text.match(/₹\s?\d[\d,]*(\.\d+)?/);
       if (!seesPay && figure) failures.push(`${where} ${label}: a rupee figure on screen (${figure[0].length} characters; value not printed)`);
       // Keyboard: Tab x6 must land on real elements with a visible focus indicator; then Esc.

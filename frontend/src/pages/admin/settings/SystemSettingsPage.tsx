@@ -515,21 +515,26 @@ function SecuritySettingsCard() {
           </Row>
 
           <FormGroupTitle>Two-factor authentication</FormGroupTitle>
+          {/* FIX-C1 (independent audit 2026-11-20): whether directors must use two-step sign-in is a Default behaviour (compulsory by default; one director
+              proposes, the other confirms). Shown here read-only, so this form never sends it. */}
           <SectionIntro>
-            Two-step sign-in is optional for directors: they can turn it on for their own account any time, and sign in normally without it. Directors hold full authority (they can move money and
-            see everyone&apos;s pay), so turning it on is strongly recommended before real salaries. Only a director can change the setting below.
+            Two-step sign-in for directors is{" "}
+            <strong>{data?.requireDirectorTwoFactor ? "compulsory" : "optional"}</strong>. It is compulsory by default, and changed only in{" "}
+            <Link to="/admin/settings/behaviours">Default behaviours</Link> (one director proposes, the other confirms). Directors hold full authority, so keep it
+            compulsory before real salaries.
           </SectionIntro>
-          <Form.Item name="requireDirectorTwoFactor" label="Require two-step sign-in for directors" valuePropName="checked" extra="Off by default. When on, a director without it is asked to set it up at sign-in and cannot act until they have.">
-            <Switch checkedChildren="Required" unCheckedChildren="Optional" />
-          </Form.Item>
           <Form.Item name="require2faRoles" label="Other roles required to set up 2FA">
             <Select mode="multiple" options={ROLE_OPTIONS} placeholder="No role requires 2FA" />
           </Form.Item>
 
           <FormGroupTitle>Auth endpoint rate limits</FormGroupTitle>
-          <SectionIntro>Per-IP limits on sensitive, unauthenticated endpoints — stops the endpoint itself being hammered.</SectionIntro>
+          <SectionIntro>
+            Per-IP limits on sensitive, unauthenticated endpoints — stops the endpoint itself being hammered. Failed sign-ins from one address are limited in{" "}
+            <Link to="/admin/settings/behaviours">Default behaviours</Link> (now {data?.rateLimits.login.maxAttempts} in {Math.round((data?.rateLimits.login.windowSeconds ?? 0) / 60)} minutes).
+          </SectionIntro>
           <div style={{ display: "flex", flexDirection: "column", gap: space[3], marginBottom: space[5] }}>
-            {(Object.keys(RATE_LIMIT_LABELS) as (keyof SecuritySettings["rateLimits"])[]).map((key) => (
+            {/* FIX-H2: the sign-in limit per address is the Default behaviour "Failed sign-ins from one address" (two directors), not edited here. */}
+            {(Object.keys(RATE_LIMIT_LABELS) as (keyof SecuritySettings["rateLimits"])[]).filter((key) => key !== "login").map((key) => (
               <div key={key} style={{ border: `1px solid ${v.borderDefault}`, borderRadius: radius.md, padding: `${space[4]}px ${space[5]}px 0` }}>
                 <div style={{ fontSize: fs.md, fontWeight: fw.semibold, color: v.textPrimary, marginBottom: space[2] }}>{RATE_LIMIT_LABELS[key]}</div>
                 <Row gutter={[24, 0]}>

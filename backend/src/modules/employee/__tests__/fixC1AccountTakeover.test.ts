@@ -81,6 +81,22 @@ describe("FIX-C1: no account takeover through the sign-in email", () => {
     expect([put.status, put.body.error?.code]).toEqual([409, "USE_DEFAULT_BEHAVIOURS"]);
   });
 
+  it("System Settings, Security still saves: the form resends the moved settings unchanged; changing one is refused before anything is written", async () => {
+    // Found by the browser walk, 2026-11-21: the form sends every field, and a payload carrying the sign-in limit was refused outright, so nothing in the
+    // Security section could be saved; a refused save had already written the fields before it.
+    const current = (await request(app).get("/api/settings/security").set(...authHeader(tD1))).body;
+    const lockoutBefore = current.lockoutMinutes;
+    const whole = { ...current, lockoutMinutes: lockoutBefore + 1 };
+    const ok = await request(app).put("/api/settings/security").set(...authHeader(tD1)).send(whole);
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    expect(ok.body.lockoutMinutes).toBe(lockoutBefore + 1);
+    const changedLimit = { ...whole, lockoutMinutes: lockoutBefore + 2, rateLimits: { ...current.rateLimits, login: { maxAttempts: current.rateLimits.login.maxAttempts + 1, windowSeconds: current.rateLimits.login.windowSeconds } } };
+    const refused = await request(app).put("/api/settings/security").set(...authHeader(tD1)).send(changedLimit);
+    expect([refused.status, refused.body.error?.code]).toEqual([409, "USE_DEFAULT_BEHAVIOURS"]);
+    expect((await request(app).get("/api/settings/security").set(...authHeader(tD1))).body.lockoutMinutes).toBe(lockoutBefore + 1); // nothing half-written
+    await request(app).put("/api/settings/security").set(...authHeader(tD1)).send({ lockoutMinutes: lockoutBefore });
+  });
+
   it("nobody else changes a director's contact or identity details; the director's own change waits for the OTHER director", async () => {
     expect((await request(app).patch(`/api/employees/${d2.employeeId}/name`).set(...authHeader(tHr)).send({ fullName: "Changed By HR", effectiveFrom: "2026-01-01" })).status).toBe(403);
     expect((await request(app).patch(`/api/employees/${d2.employeeId}/bank`).set(...authHeader(tHr)).send({ accountNumber: "000011112222", accountNumberConfirm: "000011112222", ifsc: "ABCD0123456", bankName: "Made Up Bank", branchName: "Made Up Branch", accountHolderName: "Made Up" })).status).toBe(403);
