@@ -1,3 +1,4 @@
+import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
 import type { ComponentType } from "react";
 import {
   AuditOutlined,
@@ -115,6 +116,8 @@ export interface EmployeeMenuLeaf {
   // Shown only to holders of this permission (e.g. Mark Attendance, P2-D:
   // the manager who marks a branch by hand). The API enforces it regardless.
   permission?: string;
+  /** FIX-L1 (independent audit 2026-11-20): hidden from someone who holds the Developer role (and is not a director); the API refuses them too. */
+  noDeveloper?: boolean;
   // PEEPS-BEGIN office-audience
   // A Wellsure Office leaf for members only, never the directors (who hold every key and use the admin portal's screen instead). Q-14: the asset register.
   officeMembersOnly?: boolean;
@@ -300,7 +303,7 @@ export const employeeMenu: EmployeeMenuEntry[] = [
         description: "Mark the attendance of the branches you're assigned to.",
       },
       { key: "wfh", label: "Work From Home", path: "attendance/wfh", icon: FormOutlined, element: WfhPage, description: "Ask to work from home on some days, when the company allows it." }, // M block 2, AT-36
-      { key: "lateness", label: "Late Arrivals", path: "attendance/lateness", icon: FieldTimeOutlined, element: LatenessPage, description: "Your late marks and allowances left; a manager also sees their team and asks HR for waivers." }, // LATE
+      { key: "lateness", label: "Late Arrivals", path: "attendance/lateness", icon: FieldTimeOutlined, element: LatenessPage, noDeveloper: true, description: "Your late marks and allowances left; a manager also sees their team and asks HR for waivers." }, // LATE
       { key: "overtime", label: "Overtime", path: "attendance/overtime", icon: FormOutlined, element: OvertimePage, description: "Claim time worked beyond your shift, when the company uses overtime." }, // M block 2, AT-19
     ],
   },
@@ -446,7 +449,8 @@ export const mobileTabs: MobileTab[] = [
 // were Phase 0 mock-ups with demo data; retired 2026-10-03 until the real
 // data exists — Phase 6 and Phase 3.)
 /** Whether this person sees the leaf (a permission-gated one only for its holders). */
-export function canSeeLeaf(leaf: EmployeeMenuLeaf, hasPermission: (key: string) => boolean): boolean {
+export function canSeeLeaf(leaf: EmployeeMenuLeaf, hasPermission: (key: string) => boolean, roleCodes: readonly string[] = []): boolean {
+  if (leaf.noDeveloper && roleCodes.includes(DEVELOPER_ROLE_CODE) && !roleCodes.includes("SUPER_ADMIN")) return false; // FIX-L1
   // PEEPS-BEGIN office-audience
   // Members only: a member holds office.workspace; a director also holds office.members.manage (never a member's key). HR holds the asset keys
   // through its role but is not a member, so it does not see these either.

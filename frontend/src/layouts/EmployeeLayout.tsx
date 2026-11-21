@@ -22,7 +22,7 @@ export function EmployeeLayout() {
   const navigate = useNavigate();
   const phone = useIsPhone();
   const { user, hasPermission } = useAuth();
-  const nav = useMemo(() => employeeNav(hasPermission), [hasPermission]);
+  const nav = useMemo(() => employeeNav(hasPermission, user?.roleCodes ?? []), [hasPermission, user?.roleCodes]);
   const isAdminTier = Boolean(user?.roleCodes.some((r) => ADMIN_TIER_ROLES.includes(r)));
 
   return (

@@ -21,7 +21,7 @@ export function MobileExplorePage() {
   const phone = useIsPhone();
   const reduced = usePrefersReducedMotion();
   const [open, setOpen] = useState<string | null>(null);
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
 
   const leafRow = (leaf: EmployeeMenuLeaf) => {
     const soon = isComingSoon(leaf);
@@ -86,7 +86,7 @@ export function MobileExplorePage() {
               </button>
               {group && isOpen && (
                 <ul id={panelId} style={{ listStyle: "none", margin: 0, padding: `0 ${space[3]}px ${space[3]}px`, display: "grid", gap: space[2] }}>
-                  {group.children.filter((l) => canSeeLeaf(l, hasPermission)).map(leafRow)}
+                  {group.children.filter((l) => canSeeLeaf(l, hasPermission, user?.roleCodes ?? [])).map(leafRow)}
                 </ul>
               )}
             </section>

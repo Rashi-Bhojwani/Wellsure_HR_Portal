@@ -32,13 +32,13 @@ export type NavEntry = NavLeaf | NavGroup;
 export const ADMIN_TIER_ROLES = ["HR_ADMIN", "HR_EXECUTIVE", "PAYROLL_ADMIN", "SUPER_ADMIN", "PAYROLL_APPROVER", "DEVELOPER"];
 
 /** Employee portal: every menu entry the person may see (permission-gated leaves only for holders). Helpdesk is pinned at the bottom as "Help Center". */
-export function employeeNav(hasPermission: (key: string) => boolean): NavEntry[] {
+export function employeeNav(hasPermission: (key: string) => boolean, roleCodes: readonly string[] = []): NavEntry[] {
   return employeeMenu
     .filter((e) => e.key !== "helpdesk")
     .map((entry): NavEntry | null => {
       if (isEmployeeMenuGroup(entry)) {
         const children = entry.children
-          .filter((c) => canSeeLeaf(c, hasPermission))
+          .filter((c) => canSeeLeaf(c, hasPermission, roleCodes))
           .map((c): NavLeaf => ({ kind: "leaf", key: c.key, label: c.label, path: `/app/${c.path}`, icon: c.icon, soon: isComingSoon(c) ? (c.phase ?? "Later") : undefined, element: c.element }));
         if (children.length === 0) return null;
         return { kind: "group", key: entry.key, label: entry.label, icon: entry.icon, children };
