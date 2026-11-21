@@ -1,3 +1,4 @@
+import { behaviourValue } from "../behaviours/service";
 import type { DirectoryToggleableField } from "@shared/constants/peopleDocuments";
 import { prisma } from "../../lib/prisma";
 import { getPeopleDocumentsSettings } from "../../lib/peopleDocumentsSettings";
@@ -104,7 +105,9 @@ async function visibleFields(): Promise<Set<DirectoryToggleableField>> {
   const set = new Set((await getPeopleDocumentsSettings()).directoryVisibleFields);
   const contact = new Set((await getPeepsSetting<DirectoryContactField[]>("directory.contactFields")) ?? []);
   for (const f of ["officialEmail", "mobile", "birthday"] as const) if (!contact.has(f)) set.delete(f);
+  // FIX-L2 (independent audit 2026-11-20): personal email follows the directors' own setting only (two directors, default off), never the System Settings list.
   set.delete("personalEmail");
+  if ((await behaviourValue("people.directoryShowsPersonalEmail")).value === true) set.add("personalEmail");
   return set;
   // PEEPS-END
 }

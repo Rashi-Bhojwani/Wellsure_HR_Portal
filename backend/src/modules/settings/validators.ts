@@ -33,7 +33,7 @@ export const updateSettingsSchema = z.object({
 
 
 export const updatePeopleDocumentsSettingsSchema = z.object({
-  directoryVisibleFields: z.array(z.enum(DIRECTORY_TOGGLEABLE_FIELDS)).optional(),
+  directoryVisibleFields: z.array(z.enum(DIRECTORY_TOGGLEABLE_FIELDS).refine((f) => f !== "personalEmail", "Personal email in the directory is a directors' setting (Default behaviours)")).optional(), // FIX-L2
   photoMaxUploadMb: z.number().positive().max(MAX_PHOTO_UPLOAD_MB_CEILING).optional(),
   documentMaxUploadMb: z.number().positive().max(MAX_DOCUMENT_UPLOAD_MB_CEILING).optional(),
   documentAllowedMimeTypes: z

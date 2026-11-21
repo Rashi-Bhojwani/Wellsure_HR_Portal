@@ -35,7 +35,9 @@ export const DIRECTORY_FIELD_POLICY: Record<string, DirectoryFieldPolicy> = {
   "EmployeePersonal.dateOfBirth": { shown: "setting", setting: "birthday" }, // day + month only, never the year
   "EmployeePersonal.gender": { shown: "never", why: "personal data, not needed to find a colleague" },
   // PEEPS-BEGIN directory-contact
-  "EmployeePersonal.personalEmail": { shown: "never", why: "personal contact detail: never in the directory (owner decision, Peeps avatars and directory)" },
+  // FIX-L2 (independent audit 2026-11-20): shown only while the two-director setting "people.directoryShowsPersonalEmail" is on (default OFF); people/directory.ts
+  // adds the "personalEmail" toggle from that setting alone (the System Settings list no longer offers it).
+  "EmployeePersonal.personalEmail": { shown: "setting", setting: "personalEmail" },
   // PEEPS-END
   "EmployeePersonal.mobile": { shown: "setting", setting: "mobile" },
   "EmployeePersonal.currentAddress": { shown: "never", why: "home address" },

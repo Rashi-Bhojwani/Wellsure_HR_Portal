@@ -17,7 +17,7 @@ import {
 } from "@ant-design/icons";
 import {
   DIRECTORY_FIELD_LABELS,
-  DIRECTORY_TOGGLEABLE_FIELDS,
+  DIRECTORY_SETTINGS_FIELDS,
   DOCUMENT_MIME_TYPES,
   MAX_DOCUMENT_UPLOAD_MB_CEILING,
   MAX_PHOTO_UPLOAD_MB_CEILING,
@@ -428,10 +428,10 @@ function PeopleDocumentsSettingsCard() {
         <Form form={form} layout="vertical" initialValues={data} onFinish={(values) => saveMutation.mutate(values)} requiredMark={false}>
           <SectionIntro>
             Everyone always sees a colleague's name, photo, employee code, designation, department and branch. Choose what else is shown — this applies company-wide.
-            The org chart always shows reporting lines.
+            The org chart always shows reporting lines. Personal email is the directors' own setting (Default behaviours, off unless both directors turn it on).
           </SectionIntro>
           <Form.Item name="directoryVisibleFields">
-            <SwitchList id="directory-fields" options={DIRECTORY_TOGGLEABLE_FIELDS.map((f) => ({ value: f, label: DIRECTORY_FIELD_LABELS[f] }))} />
+            <SwitchList id="directory-fields" options={DIRECTORY_SETTINGS_FIELDS.map((f) => ({ value: f, label: DIRECTORY_FIELD_LABELS[f] }))} />
           </Form.Item>
           <FormGroupTitle>Uploads</FormGroupTitle>
           <Row gutter={[24, 0]}>

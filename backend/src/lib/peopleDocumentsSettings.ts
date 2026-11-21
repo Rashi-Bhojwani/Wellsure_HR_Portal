@@ -38,7 +38,7 @@ export async function getPeopleDocumentsSettings(): Promise<PeopleDocumentsSetti
   ]);
   return {
     directoryVisibleFields: fields.filter((f): f is DirectoryToggleableField =>
-      (DIRECTORY_TOGGLEABLE_FIELDS as readonly string[]).includes(f),
+      (DIRECTORY_TOGGLEABLE_FIELDS as readonly string[]).includes(f) && f !== "personalEmail", // FIX-L2: a directors' setting, not this list
     ),
     photoMaxUploadMb: photoMb,
     documentMaxUploadMb: docMb,

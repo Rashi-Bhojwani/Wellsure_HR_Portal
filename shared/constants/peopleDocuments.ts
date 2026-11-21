@@ -16,6 +16,9 @@ export const DIRECTORY_TOGGLEABLE_FIELDS = [
   "dateOfJoining",
 ] as const;
 export type DirectoryToggleableField = (typeof DIRECTORY_TOGGLEABLE_FIELDS)[number];
+/** FIX-L2 (independent audit 2026-11-20): what the System Settings screen offers. Personal email is not among them: it follows the directors' two-director setting
+ *  "Colleagues see a personal email in the directory" (Default behaviours, default off), so no switch here suggests a control that does nothing. */
+export const DIRECTORY_SETTINGS_FIELDS = DIRECTORY_TOGGLEABLE_FIELDS.filter((f) => f !== "personalEmail");
 
 export const DIRECTORY_FIELD_LABELS: Record<DirectoryToggleableField, string> = {
   officialEmail: "Official email",

@@ -136,11 +136,22 @@ describe("People directory field allowlist", () => {
       expect(json).not.toContain("07-19");
     });
 
+    // FIX-L2 (independent audit 2026-11-20): changed test. "Every toggle on" now also means the directors' own setting for personal email (it left the System
+    // Settings list), turned on and back off here by two made-up directors.
     it("with every toggle on, exactly the toggled columns are added — and the birth year still never is", async () => {
+      const directors = async (on: boolean) => {
+        const pr = await prisma.behaviourProposal.create({ data: { key: "people.directoryShowsPersonalEmail", value: on, reason: "test", proposedByUserId: "test-director-a" } });
+        await prisma.behaviourConfirmation.create({ data: { proposalId: pr.id, confirmedByUserId: "test-director-b" } });
+      };
       await setSetting(PEOPLE_DOCUMENTS_SETTING_KEYS.directoryVisibleFields, [...DIRECTORY_TOGGLEABLE_FIELDS]);
-      const json = await everyResponseMentioningSubject();
-      expectOnlyAllowed(json, new Set(DIRECTORY_TOGGLEABLE_FIELDS));
-      expect(json).toContain('"birthday":"07-19"');
+      await directors(true);
+      try {
+        const json = await everyResponseMentioningSubject();
+        expectOnlyAllowed(json, new Set(DIRECTORY_TOGGLEABLE_FIELDS));
+        expect(json).toContain('"birthday":"07-19"');
+      } finally {
+        await directors(false);
+      }
     });
   });
 });

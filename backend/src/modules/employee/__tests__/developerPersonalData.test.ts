@@ -81,7 +81,7 @@ describe("the Developer sees no personal contact details", () => {
     expect((await get("dev", `/api/employee-extras/${p.target!.employeeId}/contact?reason=testing`)).status).toBe(403);
   });
 
-  it("the colleague directory: with the company toggle on, colleagues see personal email and mobile; the Developer does not", async () => {
+  it("the colleague directory: with the directors' setting on, colleagues see personal email (and mobile with the toggle); the Developer does not", async () => {
     const dev = await get("dev", `/api/people/${p.target!.employeeId}`);
     expect(dev.status).toBe(200);
     expect(dev.body.personalEmail).toBeUndefined();
@@ -90,12 +90,23 @@ describe("the Developer sees no personal contact details", () => {
     const devList = await get("dev", "/api/people?search=" + encodeURIComponent(p.target!.employeeCode));
     const entry = (devList.body.entries ?? devList.body.items ?? devList.body).find?.((x: { id: string }) => x.id === p.target!.employeeId);
     expect(entry?.personalEmail).toBeUndefined();
-    // Peeps final merge (2026-11-19, CHANGED_TESTS.md): the owners' Peeps directory decision is that a colleague never sees a personal email in the
-    // directory, whatever the company toggle ("personal email never shows", PEEPS_PLAN Module 1; employees do not read each other's data). The
-    // Developer half of this test is unchanged.
-    const emp = await get("emp", `/api/people/${p.target!.employeeId}`);
-    expect(emp.status).toBe(200);
-    expect(emp.body.personalEmail).toBeUndefined();
+    // FIX-L2 (independent audit 2026-11-20): the earlier assertion is restored, now against the directors' own setting "Colleagues see a personal email in the
+    // directory" (two directors, default OFF). Off: a colleague does not see it. On: a colleague does (and the Developer still never does).
+    const off = await get("emp", `/api/people/${p.target!.employeeId}`);
+    expect(off.status).toBe(200);
+    expect(off.body.personalEmail).toBeUndefined();
+    const set = async (on: boolean) => {
+      const pr = await prisma.behaviourProposal.create({ data: { key: "people.directoryShowsPersonalEmail", value: on, reason: "test", proposedByUserId: "test-director-a" } });
+      await prisma.behaviourConfirmation.create({ data: { proposalId: pr.id, confirmedByUserId: "test-director-b" } });
+    };
+    await set(true);
+    try {
+      const emp = await get("emp", `/api/people/${p.target!.employeeId}`);
+      expect(emp.body.personalEmail).toBe(target.personalEmail);
+      expect((await get("dev", `/api/people/${p.target!.employeeId}`)).body.personalEmail).toBeUndefined();
+    } finally {
+      await set(false);
+    }
   });
 
   it("the audit log hides every value from the Developer (as before)", async () => {
