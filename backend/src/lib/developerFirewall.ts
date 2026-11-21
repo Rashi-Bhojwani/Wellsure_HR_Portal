@@ -26,6 +26,10 @@ export const DEVELOPER_SELF_SERVICE: ReadonlyArray<{ method: string; path: RegEx
   { method: "POST", path: /^\/api\/exits\/resignations(\/[^/]+\/withdraw)?$/, why: "their own resignation" },
   { method: "POST", path: /^\/api\/unmute\/bookings(\/[^/]+\/(cancel|reschedule))?$/, why: "their own booking" },
   { method: "POST", path: /^\/api\/nudges$/, why: "send a nudge" },
+  { method: "POST", path: /^\/api\/badges$/, why: "give a badge (peer recognition, like kudos)" },
+  { method: "POST", path: /^\/api\/assets\/mine\/[^/]+\/acknowledge$/, why: "acknowledge an asset issued to them" },
+  { method: "POST", path: /^\/api\/assets\/requests(\/[^/]+\/cancel)?$/, why: "their own asset request (decided by someone else)" },
+  { method: "POST", path: /^\/api\/leave-documents\/requests\/[^/]+$/, why: "a document for their own leave request (only the employee attaches, checked in the service)" },
   { method: "*", path: /^\/api\/avatars\/me(\/surprise)?$/, why: "their own avatar" },
   { method: "PUT", path: /^\/api\/employee-extras\/grid-columns\/[^/]+$/, why: "their own grid column choice" },
 ];

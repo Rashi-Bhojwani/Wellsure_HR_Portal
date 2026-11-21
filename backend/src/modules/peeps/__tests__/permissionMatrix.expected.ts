@@ -127,7 +127,7 @@ export const EXPECTED: Record<string, string> = {
   "POST /api/avatars/:employeeId/remove": "401 403 403 403 400 403 403 400 403 401",
   "POST /api/avatars/me/surprise": "401 400 400 400 400 400 400 400 400 401",
   "POST /api/badges": "401 400 400 400 400 400 400 400 400 401",
-  "POST /api/badges/:id/revoke": "401 400 400 400 400 400 400 400 400 401",
+  "POST /api/badges/:id/revoke": "401 400 400 400 400 400 400 400 403 401", // changed 2026-11-21 (audit C3/M7): director-only; the Developer firewall refuses it before validation
   "POST /api/exits/cases/:id/checklist/start": "401 404 404 404 404 404 404 404 403 401",
   "POST /api/exits/cases/:id/close": "401 400 400 400 400 400 400 400 403 401",
   "POST /api/exits/cases/:id/interview": "401 400 400 400 400 400 400 400 403 401",
@@ -147,9 +147,9 @@ export const EXPECTED: Record<string, string> = {
   "POST /api/leave-rules/:code/versions": "401 403 403 403 400 403 403 400 403 401",
   "POST /api/leave-rules/:code/versions/:version/approve": "401 403 403 403 403 403 403 400 403 401",
   "POST /api/nudges": "401 400 400 400 400 400 400 400 400 401",
-  "POST /api/nudges/:id/remove": "401 400 400 400 400 400 400 400 400 401",
+  "POST /api/nudges/:id/remove": "401 400 400 400 400 400 400 400 403 401", // changed 2026-11-21 (audit C3/M7): director-only; the Developer firewall refuses it before validation
   "POST /api/nudges/:id/review": "401 404 404 404 404 404 404 404 403 401",
-  "POST /api/nudges/:id/review/decide": "401 400 400 400 400 400 400 400 400 401",
+  "POST /api/nudges/:id/review/decide": "401 400 400 400 400 400 400 400 403 401", // changed 2026-11-21 (audit C3/M7): director-only; the Developer firewall refuses it before validation
   "POST /api/peeps/office/changes": "401 403 403 403 403 403 403 400 403 401",
   "POST /api/peeps/office/changes/:id/confirm": "401 403 403 403 403 403 403 404 403 401",
   "POST /api/peeps/office/changes/:id/withdraw": "401 403 403 403 403 403 403 400 403 401",
