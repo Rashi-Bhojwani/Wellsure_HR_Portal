@@ -36,7 +36,7 @@ import { sendInvitationEmail, sendPasswordResetEmail, sendWelcomeEmail } from ".
 import type { LoginResult, LoginTokens, RequestMetaInput } from "./types";
 import { inForceOn } from "../../lib/effectiveDating";
 import { behaviourValue } from "../behaviours/service";
-import { redis } from "../../lib/redis";
+import { redis, withTimeout } from "../../lib/redis";
 import { createNotification } from "../notifications/service";
 import { findEmployeeIdByLoginId, normaliseLoginId } from "./loginId";
 
@@ -243,6 +243,18 @@ function dummyHash(): Promise<string> {
   return dummyPasswordHash;
 }
 
+// FIX-M3 (independent audit 2026-11-20): when the failed-sign-in store (Redis) is down or slow, sign-in answers within 2 s with a plain 503 and FAILS CLOSED:
+// nobody is let in without the attempt being counted. Every store call in the sign-in path goes through this.
+export const SIGN_IN_UNAVAILABLE_MESSAGE = "Sign-in is temporarily unavailable. Try again shortly.";
+async function rateStore<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await withTimeout(fn(), 1500, "sign-in rate store");
+  } catch (err) {
+    logger.error({ err }, "sign-in rate store unavailable");
+    throw new HttpError(503, SIGN_IN_UNAVAILABLE_MESSAGE, "SIGN_IN_UNAVAILABLE");
+  }
+}
+
 // spec §3: login = employee number + password.
 export async function login(employeeCode: string, password: string, meta: RequestMetaInput): Promise<LoginResult> {
   const started = Date.now();
@@ -264,7 +276,7 @@ export async function login(employeeCode: string, password: string, meta: Reques
   };
 
   // Over the limit for this number (held or not) or for this IP: decided before anything is looked up, so the reply cannot depend on the number.
-  if (await loginOverLimit(employeeCode, meta.ipAddress)) {
+  if (await rateStore(() => loginOverLimit(employeeCode, meta.ipAddress))) {
     await burnVerify();
     return tooMany();
   }
@@ -274,7 +286,7 @@ export async function login(employeeCode: string, password: string, meta: Reques
   const employee = employeeId ? await prisma.employee.findUnique({ where: { id: employeeId }, include: { user: true } }) : null;
   if (!employee?.user) {
     await burnVerify();
-    await loginFailureCount(employeeCode, meta.ipAddress);
+    await rateStore(() => loginFailureCount(employeeCode, meta.ipAddress));
     return fail();
   }
   const user = employee.user;
@@ -282,7 +294,7 @@ export async function login(employeeCode: string, password: string, meta: Reques
   // Invited (no password yet), suspended or deactivated: exactly the reply an unknown number gets, counted the same way.
   if (user.status !== "ACTIVE") {
     await burnVerify();
-    await loginFailureCount(employeeCode, meta.ipAddress);
+    await rateStore(() => loginFailureCount(employeeCode, meta.ipAddress));
     return fail();
   }
   // A lock recorded on the account whose counter has gone (for example Redis was emptied): still refused, with the same over-limit reply.
@@ -292,14 +304,14 @@ export async function login(employeeCode: string, password: string, meta: Reques
   }
   if (!user.passwordHash) {
     await burnVerify();
-    await recordFailedLogin(user.id, meta, await loginFailureCount(employeeCode, meta.ipAddress));
+    await recordFailedLogin(user.id, meta, await rateStore(() => loginFailureCount(employeeCode, meta.ipAddress)));
     return fail();
   }
   if (!(await argon2.verify(user.passwordHash, password))) {
-    await recordFailedLogin(user.id, meta, await loginFailureCount(employeeCode, meta.ipAddress));
+    await recordFailedLogin(user.id, meta, await rateStore(() => loginFailureCount(employeeCode, meta.ipAddress)));
     return fail();
   }
-  await clearLoginFailures(employeeCode);
+  await rateStore(() => clearLoginFailures(employeeCode));
 
   await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null } });
 

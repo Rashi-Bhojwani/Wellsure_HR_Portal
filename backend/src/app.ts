@@ -23,7 +23,7 @@ import { env } from "./config/env";
 import { isDraining } from "./lib/lifecycle";
 import { logger } from "./lib/logger";
 import { prisma } from "./lib/prisma";
-import { redis } from "./lib/redis";
+import { redis, withTimeout } from "./lib/redis";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { noStore } from "./middleware/noStore";
 import { devStorageRouter } from "./integrations/storage";
@@ -306,13 +306,12 @@ export function createApp(opts: { trustProxyHops?: number; requestLogger?: typeo
       res.status(503).json({ status: "draining" });
       return;
     }
+    // FIX-M3: each check answers within 1.5 s, so /ready says 503 within 2 s when the database or Redis is down instead of hanging.
     const [dbOk, redisOk] = await Promise.all([
-      prisma
-        .$queryRaw`SELECT 1`
+      withTimeout(prisma.$queryRaw`SELECT 1`, 1500, "database check")
         .then(() => true)
         .catch(() => false),
-      redis
-        .ping()
+      withTimeout(redis.ping(), 1500, "redis check")
         .then(() => true)
         .catch(() => false),
     ]);
