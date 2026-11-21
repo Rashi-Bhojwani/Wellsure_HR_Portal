@@ -1,3 +1,4 @@
+import { businessTodayIso } from "../../lib/businessDate";
 import * as contactChanges from "./contactChanges";
 import { cancelScheduled } from "./scheduledChanges";
 import * as photos from "../people/photos";
@@ -80,7 +81,7 @@ export async function exportEmployees(req: Request, res: Response): Promise<void
   const { includeSensitive, ...query } = req.query as never as { includeSensitive: boolean } & gridService.EmployeeListQuery;
   const buffer = await gridService.exportEmployeesExcel(query, viewer(req), scope(req), includeSensitive, actorMeta(req));
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  res.setHeader("Content-Disposition", `attachment; filename="employees-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+  res.setHeader("Content-Disposition", `attachment; filename="employees-${businessTodayIso()}.xlsx"`);
   res.status(200).send(buffer);
 }
 

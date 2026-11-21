@@ -1,3 +1,4 @@
+import { businessTodayIso } from "../../../lib/businessDate";
 import { z } from "zod";
 import { PAYROLL_REPORTS, PAYROLL_REPORT_KEYS, type PayrollReportKey, type PayrollReportResult } from "@shared/constants/payrollReports";
 import { writeAuditLog } from "../../../lib/audit";
@@ -128,7 +129,7 @@ export async function exportReport(rawKey: string, rawQuery: Record<string, unkn
   if (unknown.length || chosen.length === 0) throw new HttpError(400, `Not a column of this report: ${unknown.join(", ") || "(none chosen)"}.`, "VALIDATION_ERROR");
   const columns = merged(def.columns, built).filter((c) => chosen.includes(c.key) || extraKeys.has(c.key)); // the data's own head columns are always exported
   const totals = totalsOf(key, built.rows, built.extraColumns?.columns ?? []);
-  const stamp = new Date().toISOString().slice(0, 10); // allow-clock: the file's date
+  const stamp = businessTodayIso(); // FIX-L6: the IST business date
   const fileName = `${key}-${stamp}.${format}`;
   const groups = f.groupBy === "branch" ? await branchGroups(key, f, actor) : null;
   const preamble = [def.title, ...built.filtersApplied, ...(groups ? [GROUPED_NOTE] : [])];

@@ -44,3 +44,8 @@ export function businessDateOf(instant: Date): Date {
   const ist = new Date(instant.getTime() + IST_OFFSET_MS);
   return new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()));
 }
+
+/** FIX-L6 (independent audit 2026-11-20): the business date (IST) as YYYY-MM-DD, for file names. Before 05:30 IST the UTC date is still yesterday. */
+export function businessTodayIso(): string {
+  return businessToday().toISOString().slice(0, 10);
+}

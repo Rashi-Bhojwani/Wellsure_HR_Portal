@@ -1,3 +1,4 @@
+import { businessTodayIso } from "../../lib/businessDate";
 import type { Request, Response } from "express";
 import * as auditLogService from "./service";
 import { DEVELOPER_ROLE_CODE } from "@shared/constants/sensitiveData";
@@ -8,7 +9,7 @@ export const valuesHiddenFor = (req: Request) => req.user!.roleCodes.includes(DE
 export async function exportAuditLogs(req: Request, res: Response): Promise<void> {
   const { buffer } = await auditLogService.exportAuditLogs(req.query as never, { canSeePayroll: req.user!.permissions.has("payroll.salary.view") }, { actorUserId: req.user!.userId, ipAddress: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null });
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  res.setHeader("Content-Disposition", `attachment; filename="audit-log-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+  res.setHeader("Content-Disposition", `attachment; filename="audit-log-${businessTodayIso()}.xlsx"`);
   res.setHeader("Cache-Control", "no-store");
   res.status(200).send(buffer);
 }

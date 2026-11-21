@@ -1,3 +1,4 @@
+import { businessTodayIso } from "../../lib/businessDate";
 import { markSeparatedInTx } from "../employee/separations";
 import ExcelJS from "exceljs";
 import { Prisma } from "@prisma/client";
@@ -251,7 +252,7 @@ export async function buildErrorReport(id: string, viewerPermissions: ReadonlySe
     if (errors.length > 0) excelRow.eachCell((cell) => (cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE0E0" } }));
   }
 
-  return { buffer: Buffer.from(await workbook.xlsx.writeBuffer()), fileName: `${dataset}-errors-${new Date().toISOString().slice(0, 10)}.xlsx` };
+  return { buffer: Buffer.from(await workbook.xlsx.writeBuffer()), fileName: `${dataset}-errors-${businessTodayIso()}.xlsx` };
 }
 
 // ── Commit ───────────────────────────────────────────────────────────────
