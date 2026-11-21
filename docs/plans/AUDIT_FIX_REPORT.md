@@ -118,11 +118,11 @@ only by Prisma 7, a major upgrade with new configuration and driver adapters, es
 | Migrations, upgrade | passed: the audited commit's migrations and seed, then the seven `fix_` migrations on top; `db:drift`: no difference |
 | Permission matrix, route inventory, Developer write sweep | passed after `ba191ce` (13 tests) |
 | First full backend suite (on `c5e2c99`) | 2,808 passed, 8 failed in 7 files: all fixed in `abe6b50` (table above) |
-| Full backend suite, alone, once | FULL_SUITE_RESULT |
-| H1 log scan | the walk's API, worker and frontend logs: 0 tokens, cookies, authorization headers or passwords, 0 PAN, Aadhaar or account-shaped values, 0 pay fields with values (scanner checked against a planted sample first); the final full-suite log: H1_SUITE_RESULT |
+| Full backend suite, alone, on the final code (`171a559`; later commits are documents only) | **passed: 336 files, 2,817 tests**, 41 minutes. Also passed locally: lint, typecheck (all four projects), frontend 34 files / 182 tests, biometric agent 17 files / 171 tests, build and bundle budgets (login 233.1 KB, shell + admin home 375.7 KB), demo company tests 7/7, both repository guards |
+| H1 log scan | the walk's API, worker and frontend logs: 0 tokens, cookies, authorization headers or passwords, 0 PAN, Aadhaar or account-shaped values, 0 pay fields with values (scanner checked against a planted sample first); the final full-suite log (2,817 tests): the same, 0 of each |
 | Browser walk (6 roles × 1280 light and 390 dark, keyboard only; `frontend/e2e/audit-fix-walk.mjs`) | passed on the final code: 156 stops (13 screens), every role sees exactly its screens and the forbidden state elsewhere; no console error; Tab always lands on an element with a visible focus ring; no rupee figure for any role except the directors (the reference values on Default behaviours). It found the two defects above (`3466f8e`, `171a559`). A keyboard-only save of System Settings, Security passed as a director at both widths |
 | `npm run check:keyboard-leave` (M10) | passed at 1280 light and 390 dark |
-| CI on the final code commit | CI_RESULT |
+| CI on the final code commit | runs once, on the push of this report's commit (code identical to `171a559`); not re-committed here, so that CI runs only once. The result is in the hand-over message |
 
 ## 5. Decisions I made (not in the prompt; each is the safer choice)
 
@@ -139,4 +139,41 @@ only by Prisma 7, a major upgrade with new configuration and driver adapters, es
 
 ## 6. Commits
 
-COMMIT_LIST
+On `peeps/foundation`, oldest first (this report's own final commit and the CI note follow):
+
+- `7cdad24` Audit fix H1: no refresh token, cookie, authorization header or password in the logs
+- `c59faeb` Audit fix H3: the leave ledger is append-only in the database
+- `cbc1875` Audit fixes C2, C3, H5, M7: director roles and leave changes need a second director; Developer is view-only
+- `d7c7196` Audit fixes C1 and M1: no account takeover through the sign-in email; a reset ends every session
+- `929eb3c` Audit fix H2: one office address never locks out the whole office
+- `b818d19` Audit fixes H4 and T1: two directors by default; never the only approver of your own pay
+- `b4233a6` Audit fixes C1, C2, C3, H2, H4: the screens
+- `789941c` Audit fix C1: drop the unused import the phase check flagged
+- `e482aa2` Audit fix M10: Apply leave dates no longer trap keyboard focus
+- `4f06ec7` Audit fix L1: the Developer is not offered Late Arrivals
+- `30598d3` Audit fix L5: migration order note (no renames)
+- `33146b0` Audit fix M2: suspend, deactivate, separate or a role change disconnects live sockets
+- `d925427` Audit fix M3: a Redis or database outage fails fast; sign-in fails closed
+- `57f49dd` Audit fix M4: the DEMO employee-number prefix is reserved outside development
+- `f3e7fb5` Audit fix M6: resetting or unlocking a director needs a second director and alerts outside
+- `30f7c48` Audit fix M6: the confirmations page names the two new director security actions
+- `72ef064` Audit fix M8: lateness waivers need a director's confirmation (default on)
+- `7c69f5f` Audit fix L2: personal email in the colleague directory is a directors' setting (default off)
+- `21ad644` Audit fix M1 follow-up: a photo URL carrying an access token is refused with 401, not 400
+- `a8f2949` Audit fix L6: export file names carry the IST business date
+- `65f032a` Audit fix L7: the Developer is refused (403) on every 'mine' payroll page
+- `62f3b99` Audit fix L4: only reserved mail domains in tests and development data
+- `c567cdf` FIX-M5: professional tax, LWF and minimum wages need the directors' explicit answer
+- `3e4b49e` Audit follow-up: interviewer-panel isolation with real interviews
+- `f870889` Audit follow-up: no pay figure in any email or notification of a payroll month
+- `9dfe103` FIX-M9: upgrade vulnerable dependencies; CI fails on a new high or critical advisory
+- `276805e` Demo company: works on a fresh database again, on any day of the month
+- `6929582` FIX-M5: drop an import the removed PT/LWF row used (lint)
+- `7f80175` FIX-C4: a guard against committing real data, in the check script and CI
+- `ba191ce` Audit follow-up: permission matrix and route inventory over the fixes' routes
+- `6527b2e` FIX-M1: Change password in Account & security
+- `c5e2c99` Audit fix report (draft) and the browser walk script
+- `abe6b50` FIX-H2 correction and the tests the final full run found
+- `3466f8e` FIX-C1/H2 follow-up: System Settings, Security saves again
+- `171a559` FIX-M5 follow-up: Ready for First Run and the setup guide say what Not set now means
+- `5582444` Audit fix report: what the full run and the browser walk found; changed tests
