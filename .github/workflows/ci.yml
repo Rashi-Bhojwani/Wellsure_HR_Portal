@@ -78,6 +78,12 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # FIX-M9 (independent audit 2026-11-20): no high or critical npm advisory in any project, except the ones scripts/check-audit.mjs lists with a reason.
+      - name: Dependency advisories
+        run: |
+          node --test scripts/__tests__/check-audit.test.mjs
+          node scripts/check-audit.mjs
+
       # The design system's standing rule (CLAUDE.md "UI rules", docs/DESIGN_SYSTEM.md §13): no raw colours outside
       # frontend/src/theme, every light token has a dark twin (also run inside `npm run lint` above), and the JS budgets hold.
       - name: Design tokens and bundle budgets
