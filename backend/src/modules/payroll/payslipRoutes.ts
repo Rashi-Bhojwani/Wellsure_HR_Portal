@@ -1,3 +1,4 @@
+import { refuseDeveloper } from "../../middleware/refuseDeveloper";
 import { Router } from "express";
 import { authenticate } from "../../middleware/authenticate";
 import { validate } from "../../middleware/validate";
@@ -8,6 +9,8 @@ import * as rv from "./run/validators";
 // uses is the signed-in one. A stranger's payslip id answers 404, exactly like one that does not exist.
 export const payslipRouter = Router();
 payslipRouter.use(authenticate);
+// FIX-L7 (independent audit 2026-11-20): the Developer is refused consistently (403) on every one of their own payroll pages, as on loans and reimbursements.
+payslipRouter.use("/mine", refuseDeveloper);
 import { openLinkRoute } from "./run/payslipLinkController";
 import { queryRoute } from "./run/payslipQueryController";
 import { querySchema } from "./run/payslipQuery";

@@ -23,6 +23,8 @@ import { requireDirector } from "../../../lib/directorAuthority";
 // route needs a pay permission AND is refused by the service unless the caller is a director. HR, managers and the Developer role hold neither, so they see nothing here, not even a count.
 export const taxRouter = Router();
 taxRouter.use(authenticate);
+// FIX-L7 (independent audit 2026-11-20): the Developer is refused consistently (403) on every one of their own tax pages (it already was on year-to-date and Form 16).
+taxRouter.use("/me", refuseDeveloper);
 
 const directors = requirePermission("payroll.salary.view");
 const rulesEdit = requirePermission("payroll.rules.manage");
